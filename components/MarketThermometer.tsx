@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { analyzeMarketSentiment } from '../services/geminiService';
 import { isApiConfigured } from '../services/apiConfigService';
 import { type NewsSource } from '../services/newsService';
 import { gatherIndicatorArticles, THERMOMETER_QUERIES } from '../services/indicatorNewsService';
 import { computeExitPressure, pressureBand, type SentimentScanResult } from '../utils/sentimentUtils';
+import { loadHistory, recordHistoryPoint, isScanStale, toEpochMs, loadAutoRefresh, saveAutoRefresh, type HistoryPoint } from '../utils/indicatorHistory';
+import Sparkline from './Sparkline';
 import { SparklesIcon } from './icons/Icons';
 
 const STORAGE_KEY = 'market-thermometer';
+const HISTORY_KEY = 'market-thermometer-history';
+/** Auto-rescan when the stored scan is older than this. */
+const AUTO_REFRESH_TTL_MS = 6 * 60 * 60 * 1000;
 
 interface StoredState {
   buffettPercentile: number | null;
@@ -45,14 +50,19 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
   const { t, locale } = useI18n();
   const [buffettPercentile, setBuffettPercentile] = useState<number | null>(null);
   const [scan, setScan] = useState<SentimentScanResult | null>(null);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const autoScanTried = useRef(false);
 
   useEffect(() => {
     const stored = loadStored();
     setBuffettPercentile(stored.buffettPercentile);
     setScan(stored.scan);
+    setHistory(loadHistory(HISTORY_KEY));
+    setAutoRefresh(loadAutoRefresh());
   }, []);
 
   const handlePercentileChange = (value: number) => {
@@ -60,11 +70,13 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
     saveStored({ buffettPercentile: value, scan });
   };
 
-  const handleScan = async () => {
-    if (!isApiConfigured()) {
-      setScanError(t('thermometer.noApi'));
-      return;
-    }
+  const handleAutoRefreshToggle = () => {
+    const next = !autoRefresh;
+    setAutoRefresh(next);
+    saveAutoRefresh(next);
+  };
+
+  const runScan = async (buffett: number | null) => {
     setIsScanning(true);
     setScanError(null);
     try {
@@ -72,7 +84,11 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
       const { articles } = await gatherIndicatorArticles(sources, THERMOMETER_QUERIES);
       const result = await analyzeMarketSentiment(articles, locale);
       setScan(result);
-      saveStored({ buffettPercentile, scan: result });
+      saveStored({ buffettPercentile: buffett, scan: result });
+      // Record the composite exit-pressure score (falls back to news score)
+      const point = computeExitPressure(buffett, result.newsScore) ?? result.newsScore;
+      const at = toEpochMs(result.scannedAt) ?? Date.now();
+      setHistory(recordHistoryPoint(HISTORY_KEY, { at, value: point }));
     } catch (err) {
       console.error('Thermometer scan failed:', err instanceof Error ? err.message : err);
       setScanError(t('thermometer.scanError'));
@@ -80,6 +96,26 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
       setIsScanning(false);
     }
   };
+
+  const handleScan = async () => {
+    if (!isApiConfigured()) {
+      setScanError(t('thermometer.noApi'));
+      return;
+    }
+    await runScan(buffettPercentile);
+  };
+
+  // Auto-refresh: on mount, if enabled and the stored scan is stale, rescan
+  // silently with the user's own model. Runs at most once per page load.
+  useEffect(() => {
+    if (autoScanTried.current) return;
+    const stored = loadStored();
+    if (!loadAutoRefresh() || !isApiConfigured()) return;
+    if (!isScanStale(stored.scan?.scannedAt, AUTO_REFRESH_TTL_MS)) return;
+    autoScanTried.current = true;
+    runScan(stored.buffettPercentile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const score = computeExitPressure(buffettPercentile, scan?.newsScore ?? null);
   const band = pressureBand(score);
@@ -89,14 +125,28 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
     <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
         <h3 className="text-lg font-bold text-gray-900">{t('thermometer.title')}</h3>
-        <button
-          onClick={handleScan}
-          disabled={isScanning}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-        >
-          <SparklesIcon className={`w-3.5 h-3.5 ${isScanning ? 'animate-pulse' : ''}`} />
-          {isScanning ? t('thermometer.scanning') : scan ? t('thermometer.rescan') : t('thermometer.scanNow')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAutoRefreshToggle}
+            role="switch"
+            aria-checked={autoRefresh}
+            className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-black transition-colors"
+            title={t('indicator.autoRefreshHint')}
+          >
+            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${autoRefresh ? 'bg-black' : 'bg-gray-300'}`} aria-hidden="true">
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${autoRefresh ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+            {t('indicator.autoRefresh')}
+          </button>
+          <button
+            onClick={handleScan}
+            disabled={isScanning}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            <SparklesIcon className={`w-3.5 h-3.5 ${isScanning ? 'animate-pulse' : ''}`} />
+            {isScanning ? t('thermometer.scanning') : scan ? t('thermometer.rescan') : t('thermometer.scanNow')}
+          </button>
+        </div>
       </div>
       <p className="text-xs text-gray-500 mb-4">{t('thermometer.subtitle')}</p>
 
@@ -129,6 +179,16 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
           <span>{t('thermometer.band.high')}</span>
           <span>{t('thermometer.band.extreme')}</span>
         </div>
+        {history.length >= 2 && (
+          <div className="flex items-center justify-between mt-3 pt-2 border-t border-stone-100">
+            <span className="text-[10px] text-gray-400">
+              {t('indicator.trendLabel', { count: String(history.length) })}
+            </span>
+            <span className={bandStyle?.text ?? 'text-gray-400'}>
+              <Sparkline points={history} ariaLabel={t('indicator.trendAria')} />
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Inputs: slow variable + fast variable status */}

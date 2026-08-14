@@ -628,5 +628,11 @@
       "tacoMentions": "TACO Meme Exposure"
     },
     "disclaimer": "AI interpretation of public news; the phase reflects the current news window only. Past validity of the TACO pattern does not guarantee the future — the one failure may cost far more than all prior small wins. Research reference only, not investment advice."
+  },
+  "indicator": {
+    "autoRefresh": "Auto",
+    "autoRefreshHint": "When on, auto-rescans on page load if the last scan is older than 6 hours (uses your configured model)",
+    "trendLabel": "Trend (last {{count}} scans)",
+    "trendAria": "Indicator history trend line"
   }
 }

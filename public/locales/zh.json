@@ -628,5 +628,11 @@
       "tacoMentions": "TACO 模式曝光度"
     },
     "disclaimer": "本指标基于公开新闻的 AI 解读，周期判定仅反映当前新闻窗口。TACO 模式的历史有效性不保证未来——模式失效那一次的亏损可能远大于此前每次的小赚。仅供研究参考，不构成投资建议。"
+  },
+  "indicator": {
+    "autoRefresh": "自动",
+    "autoRefreshHint": "打开后，页面加载时若上次扫描超过 6 小时将自动重扫（使用你配置的模型）",
+    "trendLabel": "趋势（近 {{count}} 次扫描）",
+    "trendAria": "指标历史趋势线"
   }
 }

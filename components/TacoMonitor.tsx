@@ -1,13 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { analyzeTacoSignals } from '../services/geminiService';
 import { isApiConfigured } from '../services/apiConfigService';
 import { type NewsSource } from '../services/newsService';
 import { gatherIndicatorArticles, TACO_QUERIES } from '../services/indicatorNewsService';
 import { deriveTacoPhase, computeEdgeDecay, decayBand, type TacoScanResult, type TacoPhase } from '../utils/tacoUtils';
+import { loadHistory, recordHistoryPoint, isScanStale, toEpochMs, loadAutoRefresh, saveAutoRefresh, type HistoryPoint } from '../utils/indicatorHistory';
+import Sparkline from './Sparkline';
 import { SparklesIcon } from './icons/Icons';
 
 const STORAGE_KEY = 'taco-monitor';
+const HISTORY_KEY = 'taco-monitor-history';
+/** Auto-rescan when the stored scan is older than this. */
+const AUTO_REFRESH_TTL_MS = 6 * 60 * 60 * 1000;
 
 const loadStored = (): TacoScanResult | null => {
   try {
@@ -46,19 +51,26 @@ const SIGNAL_KEYS = ['threatEscalation', 'marketPanic', 'walkback', 'complacency
 const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
   const { t, locale } = useI18n();
   const [scan, setScan] = useState<TacoScanResult | null>(null);
+  const [history, setHistory] = useState<HistoryPoint[]>([]);
+  const [autoRefresh, setAutoRefresh] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const autoScanTried = useRef(false);
 
   useEffect(() => {
     setScan(loadStored());
+    setHistory(loadHistory(HISTORY_KEY));
+    setAutoRefresh(loadAutoRefresh());
   }, []);
 
-  const handleScan = async () => {
-    if (!isApiConfigured()) {
-      setScanError(t('taco.noApi'));
-      return;
-    }
+  const handleAutoRefreshToggle = () => {
+    const next = !autoRefresh;
+    setAutoRefresh(next);
+    saveAutoRefresh(next);
+  };
+
+  const runScan = async () => {
     setIsScanning(true);
     setScanError(null);
     try {
@@ -67,6 +79,12 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
       const result = await analyzeTacoSignals(articles, locale);
       setScan(result);
       saveStored(result);
+      // Record the edge-decay value (TACO crowding proxy) as the trend series
+      const decayPoint = computeEdgeDecay(result.signals);
+      if (decayPoint != null) {
+        const at = toEpochMs(result.scannedAt) ?? Date.now();
+        setHistory(recordHistoryPoint(HISTORY_KEY, { at, value: decayPoint }));
+      }
     } catch (err) {
       console.error('TACO scan failed:', err instanceof Error ? err.message : err);
       setScanError(t('taco.scanError'));
@@ -74,6 +92,26 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
       setIsScanning(false);
     }
   };
+
+  const handleScan = async () => {
+    if (!isApiConfigured()) {
+      setScanError(t('taco.noApi'));
+      return;
+    }
+    await runScan();
+  };
+
+  // Auto-refresh: on mount, if enabled and the stored scan is stale, rescan
+  // silently with the user's own model. Runs at most once per page load.
+  useEffect(() => {
+    if (autoScanTried.current) return;
+    const stored = loadStored();
+    if (!loadAutoRefresh() || !isApiConfigured()) return;
+    if (!isScanStale(stored?.scannedAt, AUTO_REFRESH_TTL_MS)) return;
+    autoScanTried.current = true;
+    runScan();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const phaseResult = scan ? deriveTacoPhase(scan.signals) : null;
   const phase = phaseResult?.phase ?? null;
@@ -85,14 +123,28 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
     <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-1">
         <h3 className="text-lg font-bold text-gray-900">{t('taco.title')}</h3>
-        <button
-          onClick={handleScan}
-          disabled={isScanning}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-        >
-          <SparklesIcon className={`w-3.5 h-3.5 ${isScanning ? 'animate-pulse' : ''}`} />
-          {isScanning ? t('taco.scanning') : scan ? t('taco.rescan') : t('taco.scanNow')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleAutoRefreshToggle}
+            role="switch"
+            aria-checked={autoRefresh}
+            className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 hover:text-black transition-colors"
+            title={t('indicator.autoRefreshHint')}
+          >
+            <span className={`relative inline-flex h-4 w-7 shrink-0 rounded-full transition-colors ${autoRefresh ? 'bg-black' : 'bg-gray-300'}`} aria-hidden="true">
+              <span className={`absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-transform ${autoRefresh ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </span>
+            {t('indicator.autoRefresh')}
+          </button>
+          <button
+            onClick={handleScan}
+            disabled={isScanning}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-full bg-black text-white hover:bg-gray-800 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+          >
+            <SparklesIcon className={`w-3.5 h-3.5 ${isScanning ? 'animate-pulse' : ''}`} />
+            {isScanning ? t('taco.scanning') : scan ? t('taco.rescan') : t('taco.scanNow')}
+          </button>
+        </div>
       </div>
       <p className="text-xs text-gray-500 mb-4">{t('taco.subtitle')}</p>
 
@@ -159,6 +211,16 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
           )}
         </div>
         <p className="text-[10px] text-gray-400 mt-1.5 leading-relaxed">{t('taco.decayHint')}</p>
+        {history.length >= 2 && (
+          <div className="flex items-center justify-between mt-2 pt-2 border-t border-stone-200/70">
+            <span className="text-[10px] text-gray-400">
+              {t('indicator.trendLabel', { count: String(history.length) })}
+            </span>
+            <span className={dBand ? DECAY_STYLES[dBand] : 'text-gray-400'}>
+              <Sparkline points={history} ariaLabel={t('indicator.trendAria')} />
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Scan meta + signals detail */}
