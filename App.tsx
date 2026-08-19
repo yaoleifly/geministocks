@@ -430,26 +430,6 @@ const MainPage: React.FC = () => {
                   <span className="font-medium">{t('footer.openSource')}</span>
                   <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded border border-gray-300 text-gray-500">MIT</span>
                 </a>
-                <p className="text-sm text-gray-500">
-                  {t('footer.contact')}
-                  <a
-                    href="mailto:codes@z.org"
-                    className="font-medium text-black hover:text-gray-700 animated-underline transition-colors"
-                  >
-                    codes@z.org
-                  </a>
-                </p>
-                <p className="text-sm text-gray-500">
-                  {t('footer.company')}
-                  <a
-                    href="https://ssgoo.net"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="font-medium text-black hover:text-gray-700 animated-underline transition-colors"
-                  >
-                    {t('footer.companyName')}
-                  </a>
-                </p>
              </div>
           </footer>
         </div>
