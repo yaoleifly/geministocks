@@ -11,28 +11,20 @@ import {
     parseTacoResponse,
 } from '../utils/indicatorScanShared';
 
-import { getApiConfig, getChatCompletionsUrl, buildAuthHeaders } from './apiConfigService';
+import { getEffectiveConfig, getChatCompletionsUrl, buildAuthHeaders } from './apiConfigService';
 import { isExaSearchEnabled, searchExa, formatExaResultsForPrompt, getExaConfig } from './exaSearchService';
 import { extractJson } from '../utils/jsonUtils';
 
-// Error thrown when the user has not configured their API settings yet
+// Kept for backward compatibility; no longer thrown since a default model is
+// always available (analysis works without user configuration).
 export const API_NOT_CONFIGURED_ERROR = 'API_NOT_CONFIGURED';
 
-const requireApiConfig = () => {
-    const config = getApiConfig();
-    if (!config) {
-        throw new Error(API_NOT_CONFIGURED_ERROR);
-    }
-    return config;
-};
-
 const getModelName = (): string => {
-    return requireApiConfig().model;
+    return getEffectiveConfig().model;
 };
 
 const getModelDisplayName = (): string => {
-    const config = getApiConfig();
-    return config ? config.model : 'Not Configured';
+    return getEffectiveConfig().model;
 };
 
 // extractJson lives in utils/jsonUtils.ts so it can be unit-tested in isolation.
@@ -108,7 +100,7 @@ function formatHttpError(status: number, body: string): string {
 }
 
 async function callOpenRouterAI(prompt: string, systemInstruction: string, modelName: string, enableWebSearch: boolean = false): Promise<any> {
-    const config = requireApiConfig();
+    const config = getEffectiveConfig();
     const apiUrl = getChatCompletionsUrl(config);
     const isOpenRouter = config.baseUrl.includes('openrouter.ai');
 
@@ -206,9 +198,6 @@ async function callOpenRouterAI(prompt: string, systemInstruction: string, model
         }
         
         const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during the API call.';
-        if (errorMessage.includes(API_NOT_CONFIGURED_ERROR)) {
-            throw new Error(API_NOT_CONFIGURED_ERROR);
-        }
         throw new Error(`AI analysis failed. Reason: ${errorMessage}`);
     }
 }

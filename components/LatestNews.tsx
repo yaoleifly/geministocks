@@ -248,8 +248,8 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
     }
     setConceptTags(restored);
     setExtractError(null);
-    // Only auto-run when the user enabled it AND a model is configured (avoids error toasts on fresh installs)
-    if (autoExtract && isApiConfigured() && articles.some(a => !restored[a.link]?.length)) {
+    // Auto-run when enabled (a default model is always available)
+    if (autoExtract && articles.some(a => !restored[a.link]?.length)) {
       runExtraction(restored);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
