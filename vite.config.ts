@@ -1,7 +1,68 @@
 import path from 'path';
-import { defineConfig, type Plugin } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 import react from '@vitejs/plugin-react';
+
+/**
+ * Dev/preview counterpart of api/model-proxy.ts: the default analysis model.
+ *
+ * Injects the site's MONK_API_KEY (loaded via loadEnv into a Node middleware,
+ * since Vite only exposes VITE_-prefixed vars to import.meta.env) and forwards
+ * OpenAI-compatible chat/completions requests to monk.party. Handles the base
+ * path and any subpath (e.g. /api/model-proxy/chat/completions) via prefix use.
+ */
+function modelProxyDevPlugin(env: Record<string, string>): Plugin {
+  const UPSTREAM_URL = 'https://monk.party/v1/chat/completions';
+  return {
+    name: 'dev-model-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/model-proxy', async (req: IncomingMessage, res: ServerResponse) => {
+        const send = (status: number, payload: string) => {
+          res.statusCode = status;
+          res.setHeader('content-type', 'application/json');
+          res.end(payload);
+        };
+
+        // Same-origin only: mirror api/model-proxy.ts so the site key can't be
+        // used as a free relay by third parties.
+        const host = (req.headers['x-forwarded-host'] || req.headers.host || '').toString().split(',')[0].trim();
+        const checkOrigin = (value: string | undefined): boolean | null => {
+          if (!value) return null;
+          try { return new URL(value).host === host; } catch { return false; }
+        };
+        const originOk = checkOrigin(req.headers.origin as string | undefined);
+        const refererOk = originOk === null ? checkOrigin(req.headers.referer as string | undefined) : null;
+        const sameOrigin = originOk !== null ? originOk : (refererOk !== null ? refererOk : false);
+        if (!sameOrigin) return send(403, JSON.stringify({ error: 'Forbidden: cross-site use of this endpoint is not allowed' }));
+
+        const apiKey = env.MONK_API_KEY || process.env.MONK_API_KEY;
+        if (!apiKey) return send(503, JSON.stringify({ error: 'Default model is not configured on the server' }));
+
+        try {
+          const chunks: Buffer[] = [];
+          await new Promise<void>((resolve) => {
+            req.on('data', (c) => chunks.push(c as Buffer));
+            req.on('end', () => resolve());
+            req.on('error', () => resolve());
+          });
+          const body = chunks.length ? Buffer.concat(chunks) : undefined;
+
+          const upstream = await fetch(UPSTREAM_URL, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+            body,
+          });
+          res.statusCode = upstream.status;
+          const ct = upstream.headers.get('content-type');
+          if (ct) res.setHeader('content-type', ct);
+          res.end(Buffer.from(await upstream.arrayBuffer()));
+        } catch (err) {
+          send(502, JSON.stringify({ error: err instanceof Error ? err.message : 'Proxy fetch failed' }));
+        }
+      });
+    },
+  };
+}
 
 /**
  * Dev/preview counterpart of the serverless function api/cors-proxy.ts.
@@ -62,7 +123,10 @@ function corsProxyDevPlugin(): Plugin {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+    // Load all env vars (no VITE_ filter): the model-proxy dev middleware runs
+    // in Node and needs MONK_API_KEY, which Vite doesn't expose to process.env.
+    const env = loadEnv(mode, process.cwd(), '');
     return {
       server: {
         port: 3000,
@@ -97,7 +161,7 @@ export default defineConfig(() => {
           },
         },
       },
-      plugins: [corsProxyDevPlugin(), react()],
+      plugins: [corsProxyDevPlugin(), modelProxyDevPlugin(env), react()],
       resolve: {
         alias: {
           '@': path.resolve(__dirname, '.'),

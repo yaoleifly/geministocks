@@ -65,18 +65,14 @@ const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, o
             {/* API Settings button */}
             <button
               onClick={onOpenApiSettings}
-              className={`flex items-center gap-x-1.5 text-xs sm:text-sm font-medium px-3 py-1 rounded-full border shadow-sm transition-colors ${
-                apiConfigured
-                  ? 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-                  : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
-              }`}
+              className="flex items-center gap-x-1.5 text-xs sm:text-sm font-medium px-3 py-1 rounded-full border shadow-sm transition-colors bg-white text-gray-700 border-gray-300 hover:border-gray-500"
               aria-label={locale === 'zh' ? '模型 API 设置' : 'Model API Settings'}
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-              <span>{locale === 'zh' ? (apiConfigured ? '模型设置' : '配置模型') : (apiConfigured ? 'API Settings' : 'Setup API')}</span>
+              <span>{locale === 'zh' ? '模型设置' : 'API Settings'}</span>
             </button>
             <div className="hidden sm:block">
               <LanguageSwitcher />

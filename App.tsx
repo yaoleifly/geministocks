@@ -130,13 +130,9 @@ const MainPage: React.FC = () => {
     document.querySelector('meta[name="twitter:description"]')?.setAttribute('content', ogDescription);
   }, [locale, t]);
 
-  // Require user API configuration before any analysis; open settings modal if missing
-  const ensureApiConfigured = (): boolean => {
-    if (isApiConfigured()) return true;
-    setIsApiSettingsOpen(true);
-    setToast({ message: locale === 'zh' ? '请先配置模型 API 地址和密钥' : 'Please configure your model API settings first', type: 'info' });
-    return false;
-  };
+  // Analysis works out of the box with the site default model; a user model is
+  // optional. Always allow analysis to proceed.
+  const ensureApiConfigured = (): boolean => true;
 
 
   const updateTopicHistory = (newHistory: TopicHistoryEntry[]) => {
@@ -292,31 +288,20 @@ const MainPage: React.FC = () => {
         <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
           <main>
             {!apiConfigured && (
-              <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6 animate-fade-in" role="region" aria-label={locale === 'zh' ? '配置引导' : 'Setup guide'}>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.077-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 text-center sm:text-left">
-                    <h2 className="text-base font-semibold text-amber-900 text-balance">
-                      {locale === 'zh' ? '请先配置分析模型' : 'Configure a model to start'}
-                    </h2>
-                    <p className="mt-1 text-sm text-amber-800 leading-relaxed text-pretty">
-                      {locale === 'zh'
-                        ? '支持云端 API 或本机 CLI，配置仅保存在浏览器本地。'
-                        : 'Cloud API or local CLI. Config stays in your browser.'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsApiSettingsOpen(true)}
-                    className="shrink-0 inline-flex items-center justify-center gap-x-1.5 rounded-full bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-amber-50"
-                  >
-                    {locale === 'zh' ? '立即配置' : 'Configure now'}
-                  </button>
+              <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 animate-fade-in" role="region" aria-label={locale === 'zh' ? '模型说明' : 'Model info'}>
+                <div className="flex-1 text-center sm:text-left">
+                  <p className="text-sm text-stone-700 leading-relaxed text-pretty">
+                    {locale === 'zh'
+                      ? '已启用默认分析模型，可直接开始分析。如需使用自己的模型（云端 API 或本机 CLI），可在设置中配置。'
+                      : 'A default analysis model is enabled — you can start right away. Prefer your own model (cloud API or local CLI)? Configure it in settings.'}
+                  </p>
                 </div>
+                <button
+                  onClick={() => setIsApiSettingsOpen(true)}
+                  className="shrink-0 inline-flex items-center justify-center gap-x-1.5 rounded-full border border-stone-300 bg-white px-4 py-2 text-sm font-medium text-stone-700 shadow-sm transition-colors hover:border-black hover:text-black focus:outline-none focus:ring-2 focus:ring-black focus:ring-offset-2 focus:ring-offset-stone-50"
+                >
+                  {locale === 'zh' ? '使用自己的模型' : 'Use your own model'}
+                </button>
               </div>
             )}
 

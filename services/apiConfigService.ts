@@ -13,6 +13,18 @@ export interface UserApiConfig {
 }
 
 /**
+ * Site default model: a same-origin proxy (/api/model-proxy) that injects the
+ * server-side MONK_API_KEY and forwards to monk.party. Lets visitors analyze
+ * out of the box with zero configuration. apiKey stays empty on the client —
+ * the key never leaves the server. Users can override this in settings.
+ */
+export const DEFAULT_API_CONFIG: UserApiConfig = {
+  baseUrl: '/api/model-proxy',
+  apiKey: '',
+  model: 'monk',
+};
+
+/**
  * 构建请求头：本机 CLI 服务（Ollama、Claude Code 代理等）通常无需 API Key
  */
 export function buildAuthHeaders(apiKey: string): Record<string, string> {
@@ -68,10 +80,25 @@ export function clearApiConfig(): void {
 }
 
 /**
- * 是否已配置
+ * 用户是否配置了自己的模型（区别于站方默认模型）
  */
 export function isApiConfigured(): boolean {
   return getApiConfig() !== null;
+}
+
+/**
+ * 实际用于分析的配置：优先使用用户自己的配置，否则回退到站方默认模型。
+ * 永不返回 null —— 未配置时也能直接分析。
+ */
+export function getEffectiveConfig(): UserApiConfig {
+  return getApiConfig() ?? DEFAULT_API_CONFIG;
+}
+
+/**
+ * 当前是否在使用站方默认模型（用户未配置自己的模型）
+ */
+export function isUsingDefaultModel(): boolean {
+  return getApiConfig() === null;
 }
 
 /**

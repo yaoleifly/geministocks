@@ -62,6 +62,10 @@
   ],
   "rewrites": [
     {
+      "source": "/api/model-proxy/:path*",
+      "destination": "/api/model-proxy"
+    },
+    {
       "source": "/ollama-api/:path*",
       "destination": "https://ollama.com/:path*"
     },

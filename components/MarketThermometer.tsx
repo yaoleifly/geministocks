@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { analyzeMarketSentiment } from '../services/geminiService';
-import { isApiConfigured } from '../services/apiConfigService';
 import { type NewsSource } from '../services/newsService';
 import { gatherIndicatorArticles, THERMOMETER_QUERIES } from '../services/indicatorNewsService';
 import { computeExitPressure, pressureBand, type SentimentScanResult } from '../utils/sentimentUtils';
@@ -98,19 +97,16 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
   };
 
   const handleScan = async () => {
-    if (!isApiConfigured()) {
-      setScanError(t('thermometer.noApi'));
-      return;
-    }
     await runScan(buffettPercentile);
   };
 
   // Auto-refresh: on mount, if enabled and the stored scan is stale, rescan
-  // silently with the user's own model. Runs at most once per page load.
+  // silently with the effective model (site default or the user's own). Runs
+  // at most once per page load.
   useEffect(() => {
     if (autoScanTried.current) return;
     const stored = loadStored();
-    if (!loadAutoRefresh() || !isApiConfigured()) return;
+    if (!loadAutoRefresh()) return;
     if (!isScanStale(stored.scan?.scannedAt, AUTO_REFRESH_TTL_MS)) return;
     autoScanTried.current = true;
     runScan(stored.buffettPercentile);
