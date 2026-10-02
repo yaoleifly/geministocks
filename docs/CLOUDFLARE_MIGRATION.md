@@ -91,3 +91,5 @@ Cloudflare 控制台 → Workers & Pages → 创建 Worker → 导入仓库 `yao
 ## 正式切换记录（2026-10-03，北京时间）
 
 mastersgo.cc 与 www.mastersgo.cc 已绑定 super-digger Worker。原 DNS：根域名 A 216.198.79.1、DNS only、TTL 600；www CNAME 090c0f46ac6bb90f.vercel-dns-017.com、DNS only、TTL Auto。邮件及其他子域名未改动。若需回退，先移除 Worker 自定义域名，再重建上述记录。125 项测试与类型检查通过。
+
+为保证 www 的首页、SPA 路径和资源路径均执行规范域名跳转，assets.run_worker_first=true；静态请求经过 Worker 再交给 ASSETS，因此也计入 Worker 请求用量。
