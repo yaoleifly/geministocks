@@ -1,3 +1,5 @@
+import { sanitizeNewsHtml } from '../utils/newsHtml';
+import { useDialog } from '../hooks/useDialog';
 import React, { useState, useEffect } from 'react';
 import { NewspaperIcon, SparklesIcon, XIcon, ExternalLinkIcon } from './icons/Icons';
 import { useI18n } from '../hooks/useI18n';
@@ -76,22 +78,25 @@ const NewsDetailModal: React.FC<{
   onAnalyze: (topic: string) => void;
 }> = ({ article, onClose, onAnalyze }) => {
   const { t } = useI18n();
+  const dialogRef = useDialog(!!article, onClose);
   if (!article) return null;
 
   const createMarkup = (htmlString: string) => {
-    return { __html: htmlString };
+    return { __html: sanitizeNewsHtml(htmlString) };
   };
 
   return (
     <div
       className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in"
       onClick={onClose}
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="news-modal-title"
     >
       <div
-        className="bg-white p-6 max-w-2xl w-full h-[80vh] flex flex-col text-left relative animate-reveal-scale rounded-2xl shadow-floating"
+        className="bg-white p-4 sm:p-6 mx-4 max-w-2xl w-full h-[80dvh] flex flex-col text-left relative animate-reveal-scale rounded-2xl shadow-floating"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-start pb-4 border-b border-gray-200">
@@ -106,10 +111,10 @@ const NewsDetailModal: React.FC<{
             <XIcon className="w-6 h-6" />
           </button>
         </div>
-        <div className="mt-4 flex-grow overflow-y-auto pr-4 text-gray-700 leading-relaxed prose prose-sm max-w-none" style={{ scrollbarWidth: 'thin' }}>
+        <div className="mt-4 flex-grow min-h-0 overflow-y-auto pr-4 text-gray-700 leading-relaxed prose prose-sm max-w-none" style={{ scrollbarWidth: 'thin' }}>
           <div dangerouslySetInnerHTML={createMarkup(article.description)} />
         </div>
-        <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center gap-3">
+        <div className="mt-6 pt-4 border-t border-gray-200 flex flex-wrap justify-between items-center gap-3">
           <span className="text-xs font-medium px-2 py-0.5 rounded-full whitespace-nowrap bg-gray-100 text-gray-800">
             {article.sourceName}
           </span>
@@ -118,7 +123,7 @@ const NewsDetailModal: React.FC<{
               href={article.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-black text-sm font-medium rounded-xl shadow-sm hover:bg-gray-100 transition-all"
+              className="inline-flex items-center gap-2 min-h-11 px-4 py-2 bg-white border border-gray-300 text-black text-sm font-medium rounded-xl shadow-sm hover:bg-gray-100 transition-all"
             >
               <ExternalLinkIcon className="w-4 h-4" />
               查看原文
@@ -128,7 +133,7 @@ const NewsDetailModal: React.FC<{
                 onClose();
                 onAnalyze(`${article.title}\n\n${stripHtml(article.description)}`);
               }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-black text-white text-sm font-medium rounded-xl shadow-sm hover:bg-gray-800 transition-all"
+              className="inline-flex items-center gap-2 min-h-11 px-4 py-2 bg-black text-white text-sm font-medium rounded-xl shadow-sm hover:bg-gray-800 transition-all"
             >
               <SparklesIcon className="w-4 h-4" />
               {t('latestNews.analyzeButton')}
@@ -167,6 +172,7 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
   const [activeSourceId, setActiveSourceId] = useState<string>('xueqiu'); // Default to 雪球
   const [selectedArticle, setSelectedArticle] = useState<NewsArticle | null>(null);
   const [customSources, setCustomSources] = useState<NewsSource[]>(() => loadCustomSources());
@@ -296,6 +302,7 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
   }, [displaySources, activeSourceId]);
 
   useEffect(() => {
+    let cancelled = false;
     const fetchNews = async () => {
       setIsLoading(true);
       setError(null);
@@ -307,20 +314,22 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
           return;
         }
         const list = await fetchNewsSource(source);
-        setArticles(list.slice(0, 4));
+        if (!cancelled) setArticles(list.slice(0, 4));
       } catch (err) {
+        if (cancelled) return;
         const errorMessage = err instanceof Error ? err.message : 'Unknown error';
         console.error(`Failed to fetch news (${activeSourceId}):`, errorMessage);
         const sourceName = displaySources.find(s => s.id === activeSourceId)?.name ?? activeSourceId;
         setError(t('latestNews.errorLoad', { sourceName }));
         setArticles([]);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
     fetchNews();
-  }, [activeSourceId, displaySources, t]);
+    return () => { cancelled = true; };
+  }, [activeSourceId, displaySources, t, reloadKey]);
 
   const handleAddSource = () => {
     setAddError(null);
@@ -361,7 +370,7 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
   return (
     <>
       <NewsDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} onAnalyze={onAnalyze} />
-      <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 hover:-translate-y-1 h-full">
+      <div className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-6 shadow-sm h-full">
         <div className="flex items-center gap-3 mb-6">
           <div className="p-2 bg-black rounded-xl shadow-lg">
             <NewspaperIcon className="w-5 h-5 text-white" />
@@ -550,7 +559,8 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
           <NewsSkeleton />
         ) : error ? (
           <div className="text-center py-4">
-            <p className="text-black bg-gray-100 p-3 rounded-lg border border-gray-200">{error}</p>
+            <p role="status" className="text-black bg-gray-100 p-3 rounded-lg border border-gray-200">{error}</p>
+            <button onClick={() => setReloadKey(key => key + 1)} className="mt-3 min-h-11 px-4 rounded-xl border border-stone-300 text-sm hover:bg-stone-50">{locale === 'zh' ? '重新加载新闻' : 'Reload news'}</button>
           </div>
         ) : (
           <ul className="space-y-4">
@@ -602,7 +612,7 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
 
                 <button
                   onClick={() => onAnalyze(`${article.title}\n\n${stripHtml(article.description)}`)}
-                  className="mt-3 relative inline-flex items-center gap-2 px-4 py-1.5 text-white text-xs font-medium rounded-full group overflow-hidden btn-premium opacity-80 group-hover:opacity-100 group-hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
+                  className="mt-3 min-h-11 relative inline-flex items-center gap-2 px-4 py-1.5 text-white text-xs font-medium rounded-full group overflow-hidden btn-premium opacity-80 group-hover:opacity-100 group-hover:shadow-md transition-all duration-300 hover:-translate-y-0.5 active:scale-95"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
                   <SparklesIcon className="w-4 h-4" />

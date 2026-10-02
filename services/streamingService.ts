@@ -1,61 +1,38 @@
 import type { AnalysisReport } from '../types'
 import type { Locale } from '../hooks/useI18n'
 import { getAnalysis as getAnalysisLegacy } from './geminiService'
-import { topicAnalysisCache, initCacheCleanup } from './cacheService'
+import { topicAnalysisCache, determineCacheTTL, initCacheCleanup } from './cacheService'
+import { getApiConfig } from './apiConfigService'
+import { getExaConfig } from './exaSearchService'
 
-// Initialize cache cleanup on module load
-if (typeof window !== 'undefined') {
-  initCacheCleanup()
-}
+if (typeof window !== 'undefined') initCacheCleanup()
 
-/**
- * Enhanced analysis function with caching + simulated streaming progress
- * Returns cached results if available, otherwise calls AI and caches the result
- */
+/** Preserve the existing API, reporting completed requests rather than simulated streaming. */
 export async function getAnalysisWithStreaming(
   topic: string,
   onProgress: (stepIndex: number) => void,
   locale: Locale,
-  onStreamProgress?: (progress: number, data: Partial<AnalysisReport>) => void
+  onStreamProgress?: (progress: number, data: Partial<AnalysisReport>) => void,
+  options: { signal?: AbortSignal; fresh?: boolean } = {}
 ): Promise<AnalysisReport> {
-  // Check cache first
-  const cached = topicAnalysisCache.get(topic)
+  options.signal?.throwIfAborted()
+  const model = getApiConfig()
+  const search = getExaConfig()
+  // Keep languages, models and search modes separate; never put API keys in cache keys.
+  const key = JSON.stringify([topic.trim(), locale, model?.baseUrl, model?.model, search.enabled, search.provider])
+  const cached = options.fresh ? null : topicAnalysisCache.get(key)
   if (cached) {
-    console.log('[v0] Returning cached topic analysis')
     onStreamProgress?.(100, cached)
     return cached
   }
-
-  // Start progress simulation
-  let currentProgress = 0
-  const progressInterval = setInterval(() => {
-    if (currentProgress < 90) {
-      currentProgress += Math.random() * 5 + 2
-      currentProgress = Math.min(currentProgress, 90)
-      onStreamProgress?.(Math.round(currentProgress), {})
-    }
-  }, 500)
-
-  try {
-    console.log('[v0] Starting topic analysis with progress tracking')
-    const result = await getAnalysisLegacy(topic, onProgress, locale)
-    
-    // Cache the result
-    topicAnalysisCache.set(topic, result)
-    
-    // Complete the progress
-    clearInterval(progressInterval)
-    onStreamProgress?.(100, result)
-    
-    return result
-  } catch (error) {
-    clearInterval(progressInterval)
-    throw error
-  }
+  const result = await getAnalysisLegacy(topic, step => {
+    onProgress(step)
+    onStreamProgress?.(Math.round(step / 3 * 100), {})
+  }, locale, options.signal)
+  options.signal?.throwIfAborted()
+  topicAnalysisCache.set(key, result, determineCacheTTL(topic))
+  onStreamProgress?.(100, result)
+  return result
 }
 
-// Re-export the original functions
-export { 
-  getAnalysis, 
-  getPolymarketAnalysis
-} from './geminiService'
+export { getAnalysis, getPolymarketAnalysis } from './geminiService'

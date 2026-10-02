@@ -1,6 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
+import './styles.css';
 import { I18nProvider } from './hooks/useI18n';
 
 const rootElement = document.getElementById('root');

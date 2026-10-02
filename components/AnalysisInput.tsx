@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { SparklesIcon } from './icons/Icons';
 import { useI18n } from '../hooks/useI18n';
 
@@ -7,60 +7,51 @@ interface AnalysisInputProps {
   setUserInput: (input: string) => void;
   onAnalyze: () => void;
   isLoading: boolean;
+  apiConfigured?: boolean;
+  draftSaved?: boolean;
 }
 
-const AnalysisInput: React.FC<AnalysisInputProps> = ({ userInput, setUserInput, onAnalyze, isLoading }) => {
-  const { t } = useI18n();
-
-  const buttonText = t('analysisInput.button');
-
+const AnalysisInput: React.FC<AnalysisInputProps> = ({ userInput, setUserInput, onAnalyze, isLoading, apiConfigured = true, draftSaved = false }) => {
+  const { t, locale } = useI18n();
+  const zh = locale === 'zh';
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const examples = zh
+    ? ['AI 数据中心扩张，会带动哪些产业链？', '研究英伟达的竞争优势、增长动力与风险', '铜价上涨如何影响矿企与制造业？']
+    : ['How does AI data center growth affect the supply chain?', 'Research NVIDIA: advantages, growth drivers and risks', 'How do rising copper prices affect miners and manufacturers?'];
   return (
-    <div className="bg-white border border-stone-200/90 rounded-2xl p-6 shadow-sm animate-reveal-up">
-      <div className="flex items-center gap-3 mb-4">
-        <div className="p-2.5 bg-black rounded-xl shadow-lg flex items-center justify-center">
-          <SparklesIcon className="w-6 h-6 text-white" />
-        </div>
+    <section className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-6 shadow-sm" aria-labelledby="analysis-input-title">
+      <div className="flex items-start gap-3 mb-4">
+        <div className="p-2.5 bg-black rounded-xl flex items-center justify-center" aria-hidden="true"><SparklesIcon className="w-5 h-5 text-white" /></div>
         <div>
-          <h3 className="text-xl font-semibold text-black">{t('analysisInput.title')}</h3>
-          <p id="input-description" className="text-sm text-gray-600">
-            {t('analysisInput.description')}
-          </p>
+          <h2 id="analysis-input-title" className="text-xl font-semibold text-black">{t('analysisInput.title')}</h2>
+          <p id="input-description" className="mt-1 text-sm text-gray-600 leading-relaxed">{t('analysisInput.description')}</p>
         </div>
       </div>
-      
+      {!userInput.trim() && <div className="flex flex-wrap gap-2 mb-4" aria-label={zh ? '试试这些方向' : 'Try a starting point'}>
+        {examples.map(example => <button key={example} disabled={isLoading} onClick={() => { setUserInput(example); inputRef.current?.focus(); }} className="min-h-11 rounded-xl border border-stone-200 bg-stone-50 px-3 py-2 text-left text-xs sm:text-sm text-stone-600 hover:border-stone-400 hover:text-black disabled:opacity-50">{example}</button>)}
+      </div>}
+      <label htmlFor="news-input" className="sr-only">{zh ? '输入新闻、公司或研究主题' : 'Enter news, a company or a research topic'}</label>
       <textarea
-        id="news-input"
-        rows={8}
-        className="w-full bg-white border-2 border-gray-200 rounded-xl px-4 py-3 text-black focus:outline-none focus:ring-4 focus:ring-gray-400/20 focus:border-black/80 transition-all duration-300 placeholder:text-gray-400"
-        placeholder={t('analysisInput.placeholder')}
-        value={userInput}
-        onChange={(e) => setUserInput(e.target.value)}
-        disabled={isLoading}
-        aria-describedby="input-description"
+        ref={inputRef} id="news-input" rows={5}
+        className="w-full min-h-36 max-h-96 resize-y bg-white border border-stone-300 rounded-xl px-4 py-3 text-base leading-relaxed text-black focus:outline-none focus:ring-4 focus:ring-stone-200 focus:border-stone-800 placeholder:text-stone-400 disabled:bg-stone-50"
+        placeholder={t('analysisInput.placeholder')} value={userInput}
+        onChange={e => setUserInput(e.target.value)}
+        onKeyDown={e => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && !e.nativeEvent.isComposing && !isLoading && userInput.trim()) { e.preventDefault(); onAnalyze(); }
+        }}
+        disabled={isLoading} aria-describedby="input-description input-hint"
       />
-
-      <div className="mt-6 flex justify-end">
-        <button
-          onClick={onAnalyze}
-          disabled={isLoading || !userInput.trim()}
-          className="relative inline-flex items-center gap-2 px-8 py-3 btn-premium text-white text-base font-medium rounded-xl group overflow-hidden shadow-lg hover:shadow-elevated transition-all duration-300 hover:-translate-y-1 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-lg disabled:-translate-y-0 disabled:hover:shadow-lg"
-        >
-          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
-          {isLoading ? (
-            <>
-              <svg aria-hidden="true" className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              <span className="relative z-10">{t('analysisInput.buttonLoading')}</span>
-            </>
-          ) : (
-            <span className="relative z-10">{buttonText}</span>
-          )}
+      <div className="mt-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <p id="input-hint" className="text-xs text-stone-500">
+          {userInput ? (draftSaved ? (zh ? '草稿已保存在此浏览器' : 'Draft saved in this browser') : (zh ? '草稿尚未保存' : 'Draft not yet saved')) : (zh ? '可先写下想法，再配置模型' : 'Write your idea, then configure a model')}
+          <span className="hidden sm:inline"> · Ctrl / ⌘ + Enter</span>
+        </p>
+        <button onClick={onAnalyze} disabled={isLoading || !userInput.trim()} className="min-h-12 inline-flex justify-center items-center gap-2 px-6 py-3 bg-stone-950 hover:bg-stone-800 text-white text-sm font-semibold rounded-xl transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+          {isLoading ? t('analysisInput.buttonLoading') : !apiConfigured ? (zh ? '配置模型后开始' : 'Configure model to start') : t('analysisInput.button')}
+          {!isLoading && <span aria-hidden="true">→</span>}
         </button>
       </div>
-    </div>
+    </section>
   );
 };
-
 export default AnalysisInput;

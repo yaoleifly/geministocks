@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useDialog } from '../hooks/useDialog';
 import { XIcon } from './icons/Icons';
 import { useI18n } from '../hooks/useI18n';
 import {
@@ -107,6 +108,8 @@ const LOCAL_PRESETS: LocalPreset[] = [
 const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, onSaved }) => {
   const { locale } = useI18n();
   const zh = locale === 'zh';
+  const dialogRef = useDialog(isOpen, onClose);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
@@ -272,9 +275,15 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
 
   const handleSave = () => {
     if (!isValid) return;
+    try {
     saveApiConfig({ baseUrl, apiKey, model } as UserApiConfig);
     // Persist real-time search config alongside the model config
     saveExaConfig({ provider: searchProvider, apiKey: exaApiKey, anysearchApiKey, enabled: exaEnabled });
+    } catch {
+      setSaveError(zh ? '浏览器无法保存配置，请检查存储权限或清理空间后重试。' : 'Your browser could not save the configuration. Check storage permissions or free up space and retry.');
+      return;
+    }
+    setSaveError(null);
     setSaved(true);
     onSaved?.();
     setTimeout(() => onClose(), 600);
@@ -293,7 +302,9 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
   };
 
   const handleClear = () => {
-    clearApiConfig();
+    try { clearApiConfig(); }
+    catch { setSaveError(zh ? '浏览器无法清除配置，请检查存储权限。' : 'Your browser could not clear the configuration. Check storage permissions.'); return; }
+    setSaveError(null);
     setBaseUrl('');
     setApiKey('');
     setModel('');
@@ -356,13 +367,15 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-label={zh ? '模型 API 设置' : 'Model API Settings'}
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -372,7 +385,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
           </h2>
           <button
             onClick={onClose}
-            className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+            className="p-3 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
             aria-label={zh ? '关闭' : 'Close'}
           >
             <XIcon className="w-5 h-5" />
@@ -380,10 +393,11 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
         </div>
 
         <div className="px-6 py-5 space-y-5">
+          {saveError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
           <p className="text-sm text-gray-500 leading-relaxed">
             {zh
-              ? '支持云端 API（OpenRouter、DeepSeek、MiniMax、Ollama）或运行在本机的 CLI 服务（9Router、Claude Code、Codex）。配置仅保存在您的浏览器本地，不会上传到服务器。'
-              : 'Use a cloud API (OpenRouter, DeepSeek, MiniMax, Ollama) or a CLI service running on your machine (9Router, Claude Code, Codex). Your config is stored locally in your browser only.'}
+              ? '支持云端 API（OpenRouter、DeepSeek、MiniMax、Ollama）或运行在本机的 CLI 服务（9Router、Claude Code、Codex）。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
+              : 'Use a cloud API (OpenRouter, DeepSeek, MiniMax, Ollama) or a CLI service running on your machine (9Router, Claude Code, Codex). Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
           </p>
 
           {/* Mode switch: Cloud API vs Local CLI */}

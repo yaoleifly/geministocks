@@ -51,7 +51,12 @@ const RETRYABLE_STATUS = new Set([408, 425, 429, 500, 502, 503, 504]);
 const MAX_FETCH_ATTEMPTS = 3;
 const FETCH_TIMEOUT_MS = 120_000; // abort a single attempt after 2 minutes
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+    signal?.throwIfAborted();
+    const cancel = () => { clearTimeout(timer); reject(signal?.reason); };
+    const timer = setTimeout(() => { signal?.removeEventListener('abort', cancel); resolve(); }, ms);
+    signal?.addEventListener('abort', cancel, { once: true });
+});
 
 /**
  * fetch with a per-attempt timeout and automatic retries on transient failures
@@ -62,25 +67,27 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 async function fetchWithRetry(url: string, init: RequestInit): Promise<Response> {
     let lastError: unknown;
     for (let attempt = 1; attempt <= MAX_FETCH_ATTEMPTS; attempt++) {
+        init.signal?.throwIfAborted();
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
         try {
-            const response = await fetch(url, { ...init, signal: controller.signal });
+            const response = await fetch(url, { ...init, signal: init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal });
             clearTimeout(timer);
             // Retry transient upstream errors if we still have attempts left.
             if (!response.ok && RETRYABLE_STATUS.has(response.status) && attempt < MAX_FETCH_ATTEMPTS) {
                 addBreadcrumb('ai', `Transient error ${response.status}, retrying`, { attempt });
-                await sleep(800 * 2 ** (attempt - 1) + Math.random() * 400);
+                await sleep(800 * 2 ** (attempt - 1) + Math.random() * 400, init.signal ?? undefined);
                 continue;
             }
             return response;
         } catch (err) {
             clearTimeout(timer);
+            init.signal?.throwIfAborted();
             lastError = err;
             // Network errors and timeouts (AbortError) are retryable.
             if (attempt < MAX_FETCH_ATTEMPTS) {
                 addBreadcrumb('ai', 'Network/timeout error, retrying', { attempt });
-                await sleep(800 * 2 ** (attempt - 1) + Math.random() * 400);
+                await sleep(800 * 2 ** (attempt - 1) + Math.random() * 400, init.signal ?? undefined);
                 continue;
             }
         }
@@ -107,7 +114,7 @@ function formatHttpError(status: number, body: string): string {
     return `API request failed with status ${status}${detail ? `: ${detail}` : ''}`;
 }
 
-async function callOpenRouterAI(prompt: string, systemInstruction: string, modelName: string, enableWebSearch: boolean = false): Promise<any> {
+async function callOpenRouterAI(prompt: string, systemInstruction: string, modelName: string, enableWebSearch: boolean = false, signal?: AbortSignal): Promise<any> {
     const config = requireApiConfig();
     const apiUrl = getChatCompletionsUrl(config);
     const isOpenRouter = config.baseUrl.includes('openrouter.ai');
@@ -147,6 +154,7 @@ async function callOpenRouterAI(prompt: string, systemInstruction: string, model
         // First attempt with JSON mode; if the provider rejects it, retry without it.
         let response = await fetchWithRetry(apiUrl, {
             method: 'POST',
+            signal,
             headers,
             body: JSON.stringify(buildRequestBody(true))
         });
@@ -160,6 +168,7 @@ async function callOpenRouterAI(prompt: string, systemInstruction: string, model
                 addBreadcrumb('ai', 'JSON mode unsupported by provider, retrying without it');
                 response = await fetchWithRetry(apiUrl, {
                     method: 'POST',
+                    signal,
                     headers,
                     body: JSON.stringify(buildRequestBody(false))
                 });
@@ -194,6 +203,7 @@ async function callOpenRouterAI(prompt: string, systemInstruction: string, model
         }
 
     } catch (error) {
+        signal?.throwIfAborted();
         console.error('Error calling AI Service:', error);
         
         // Capture error with context for local diagnostics
@@ -326,7 +336,8 @@ const detectNeedsWebSearch = (topic: string): boolean => {
     return needsRealTime || lowerTopic.length > 10;
 };
 
-export const getAnalysis = async (topic: string, onProgress: (stepIndex: number) => void, locale: Locale): Promise<AnalysisReport> => {
+export const getAnalysis = async (topic: string, onProgress: (stepIndex: number) => void, locale: Locale, signal?: AbortSignal): Promise<AnalysisReport> => {
+    signal?.throwIfAborted();
     const modelName = getModelName();
     const modelDisplayName = getModelDisplayName();
     const { part1System, part2System, part3System } = getAnalysisSystemInstructions(locale, modelDisplayName);
@@ -343,7 +354,7 @@ export const getAnalysis = async (topic: string, onProgress: (stepIndex: number)
     const searchProviderUsed = getExaConfig().provider;
     if (isExaSearchEnabled()) {
         try {
-            const { ok, results } = await searchExa(topic);
+            const { ok, results } = await searchExa(topic, 6, signal);
             if (ok && results.length > 0) {
                 realTimeContext = formatExaResultsForPrompt(results, locale);
                 exaUsed = true;
@@ -353,6 +364,7 @@ export const getAnalysis = async (topic: string, onProgress: (stepIndex: number)
                     .map((r) => ({ title: r.title, url: r.url, publishedDate: r.publishedDate }));
             }
         } catch (err) {
+            signal?.throwIfAborted();
             // Real-time search is best-effort; never block analysis if it fails
             captureError(err instanceof Error ? err : new Error(String(err)), { stage: 'exa-search' });
         }
@@ -362,17 +374,24 @@ export const getAnalysis = async (topic: string, onProgress: (stepIndex: number)
         ? `${realTimeContext}\n\n---\n\nPlease analyze the following text: --- ${topic} ---`
         : `Please analyze the following text: --- ${topic} ---`;
 
-    onProgress(0); // "Running core analysis..."
+    signal?.throwIfAborted();
+    onProgress(0); // Three model requests run in parallel.
+    let completed = 0;
+    const runPart = async (instructions: string) => {
+        const result = await callOpenRouterAI(prompt, instructions, modelName, enableWebSearch, signal);
+        signal?.throwIfAborted();
+        onProgress(++completed);
+        return result;
+    };
     
     // OPTIMIZATION: Run all 3 AI calls in parallel instead of sequentially
     // This reduces total time from (T1 + T2 + T3) to max(T1, T2, T3)
     const [part1Result, part2Result, part3Result] = await Promise.all([
-        callOpenRouterAI(prompt, part1System, modelName, enableWebSearch),
-        callOpenRouterAI(prompt, part2System, modelName, enableWebSearch),
-        callOpenRouterAI(prompt, part3System, modelName, enableWebSearch),
+        runPart(part1System),
+        runPart(part2System),
+        runPart(part3System),
     ]);
     
-    onProgress(3); // "Finalizing report..." (skip intermediate steps since parallel)
 
     // Combine results from all parts with data freshness metadata
     const now = new Date();
@@ -448,7 +467,8 @@ const getPolymarketAnalysisSystemInstruction = (locale: Locale): string => {
 };
 
 
-export const getPolymarketAnalysis = async (url: string, locale: Locale): Promise<AnalysisReport> => {
+export const getPolymarketAnalysis = async (url: string, locale: Locale, signal?: AbortSignal): Promise<AnalysisReport> => {
+    signal?.throwIfAborted();
     const modelName = getModelName();
     const systemInstruction = getPolymarketAnalysisSystemInstruction(locale);
     
@@ -461,7 +481,7 @@ export const getPolymarketAnalysis = async (url: string, locale: Locale): Promis
     `;
 
     // Enable web search to get latest prediction market data
-    return callOpenRouterAI(prompt, systemInstruction, modelName, true);
+    return callOpenRouterAI(prompt, systemInstruction, modelName, true, signal);
 };
 
 /**
