@@ -51,7 +51,7 @@ Cloudflare 控制台 → Workers & Pages → 创建 Worker → 导入仓库 `yao
 - 部署命令：`pnpm exec wrangler deploy`
 - Node.js：22 LTS（至少 22.12）
 
-先在迁移分支验证，之后再切到 main 的自动部署。域名不写入 wrangler 配置，防止一次测试部署意外切换正式流量。
+先在迁移分支验证，之后再切到 main 的自动部署。生产配置已绑定 mastersgo.cc 和 www.mastersgo.cc；www 使用 308 跳转到 HTTPS 根域名并保留路径与查询参数。复制项目做其他账户测试时，先移除 routes 配置。
 
 ## 上线验收
 
@@ -87,3 +87,7 @@ Cloudflare 控制台 → Workers & Pages → 创建 Worker → 导入仓库 `yao
 - 浏览器实测 AnySearch 匿名搜索成功，Ollama 模型列表成功；无密钥的 Exa 请求到达上游并返回 402（需要密钥或支付凭据）。
 - 自带密钥的完整分析和原数据库计数尚需生产配置验证。
 - 本机 Node 26 的 experimental webstorage 会影响既有 happy-dom 测试，验证时使用 `NODE_OPTIONS=--no-experimental-webstorage pnpm test`。部署与 CI 建议使用 Node 22 LTS。
+
+## 正式切换记录（2026-10-03，北京时间）
+
+mastersgo.cc 与 www.mastersgo.cc 已绑定 super-digger Worker。原 DNS：根域名 A 216.198.79.1、DNS only、TTL 600；www CNAME 090c0f46ac6bb90f.vercel-dns-017.com、DNS only、TTL Auto。邮件及其他子域名未改动。若需回退，先移除 Worker 自定义域名，再重建上述记录。125 项测试与类型检查通过。

@@ -104,6 +104,11 @@ async function analyze(request: Request, env: Env): Promise<Response> {
 }
 async function handleRequest(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
+    if (url.hostname === "www.mastersgo.cc") {
+      url.hostname = "mastersgo.cc"
+      url.protocol = "https:"
+      return Response.redirect(url.toString(), 308)
+    }
     try {
       if (url.pathname === '/api/cors-proxy') {
         let target: URL

@@ -8,7 +8,28 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    "run_worker_first": ["/api", "/api/*", "/exa-api", "/exa-api/*", "/anysearch-api", "/anysearch-api/*", "/ollama-api", "/ollama-api/*"]
+    "run_worker_first": [
+      "/api",
+      "/api/*",
+      "/exa-api",
+      "/exa-api/*",
+      "/anysearch-api",
+      "/anysearch-api/*",
+      "/ollama-api",
+      "/ollama-api/*"
+    ]
   },
-  "observability": { "enabled": true }
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    {
+      "pattern": "mastersgo.cc",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.mastersgo.cc",
+      "custom_domain": true
+    }
+  ]
 }

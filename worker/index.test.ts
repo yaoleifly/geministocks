@@ -6,6 +6,12 @@ const request = (path: string, init: RequestInit = {}) => new Request(`https://m
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks() })
 
 describe('Cloudflare routing and proxy', () => {
+  it('redirects www to the canonical HTTPS host with path and query preserved', async () => {
+    const response = await worker.fetch(new Request('https://www.mastersgo.cc/topic?q=test'), { ASSETS: assets })
+    expect(response.status).toBe(308)
+    expect(response.headers.get('Location')).toBe('https://mastersgo.cc/topic?q=test')
+    expect(assets.fetch).not.toHaveBeenCalled()
+  })
   it('rejects IP literals, private names, credentials and non-HTTPS URLs', () => {
     for (const target of ['http://api.example.com', 'https://127.0.0.1', 'https://10.0.0.1', 'https://[::1]', 'https://2130706433', 'https://localhost', 'https://foo.local', 'https://a:b@api.openai.com', 'https://api.openai.com:444']) {
       expect(isPublicTarget(new URL(target)), target).toBe(false)
