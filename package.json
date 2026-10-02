@@ -16,7 +16,10 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "dev:cloudflare": "pnpm build && wrangler dev",
+    "deploy": "pnpm build && wrangler deploy",
+    "deploy:check": "pnpm build && wrangler deploy --dry-run"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
@@ -38,6 +41,8 @@
     "happy-dom": "^20.11.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vitest": "^4.1.8"
-  }
+    "vitest": "^4.1.8",
+    "wrangler": "^4.145.0"
+  },
+  "packageManager": "pnpm@11.8.0"
 }

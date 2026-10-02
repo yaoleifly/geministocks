@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "super-digger",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-10-02",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true
+  },
+  "routes": [
+    {
+      "pattern": "mastersgo.cc",
+      "custom_domain": true
+    },
+    {
+      "pattern": "www.mastersgo.cc",
+      "custom_domain": true
+    }
+  ]
+}
