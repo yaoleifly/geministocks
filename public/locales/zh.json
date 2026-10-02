@@ -1,9 +1,9 @@
 {
   "meta": {
     "title": "挖掘机 | AI驱动的智能投研与股票分析利器",
-    "description": "利用Google Gemini AI，挖掘机能将任何财经新闻或主题一键转化为深度投资分析报告。覆盖宏观、产业链、基本面与市场情绪，助您精准挖掘A股、港股、美股的投资机会。",
+    "description": "使用你选择的 AI 模型，挖掘机能将任何财经新闻或主题一键转化为深度投资分析报告。覆盖宏观、产业链、基本面与市场情绪，助您精准挖掘A股、港股、美股的投资机会。",
     "ogTitle": "挖掘机 | AI驱动的智能投研与股票分析利器",
-    "ogDescription": "利用Google Gemini AI，挖掘机能将任何财经新闻或主题一键转化为深度投资分析报告。覆盖宏观、产业链、基本面与市场情绪，助您精准挖掘A股、港股、美股的投资机会。"
+    "ogDescription": "使用你选择的 AI 模型，挖掘机能将任何财经新闻或主题一键转化为深度投资分析报告。覆盖宏观、产业链、基本面与市场情绪，助您精准挖掘A股、港股、美股的投资机会。"
   },
   "header": {
     "title": "挖掘机",
@@ -44,9 +44,9 @@
     "openSource": "开源于 GitHub",
     "deployOwn": "部署你自己的实例：",
     "deployVercel": "Deploy to Vercel",
-    "deployVercelHint": "一键克隆仓库并部署到 Vercel（推荐，API 代理开箱即用）",
+    "deployVercelHint": "克隆仓库并部署到 Vercel",
     "deployCloudflare": "Deploy to Cloudflare",
-    "deployCloudflareHint": "部署到 Cloudflare（需自行配置 API 代理）"
+    "deployCloudflareHint": "部署到 Cloudflare Workers，已内置 API 代理"
   },
   "imageModal": {
     "title": "欢迎关注\"小声读书\""

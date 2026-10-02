@@ -18,7 +18,7 @@ const scoreBadgeClass = (score: number): string => {
 };
 
 const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, onDelete, onClear, onReanalyze }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [sortMode, setSortMode] = useState<SortMode>('newest');
   const { t } = useI18n();
@@ -49,7 +49,7 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
     <div className="bg-white border border-stone-200/90 rounded-2xl shadow-sm">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex justify-between items-center p-6 text-left focus:outline-none"
+        className="w-full flex justify-between items-center p-4 sm:p-6 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-stone-900"
         aria-expanded={isExpanded}
         aria-controls="history-content"
       >
@@ -57,7 +57,7 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
           <div className="p-2 bg-black rounded-xl shadow-lg">
             <ClockIcon className="w-5 h-5 text-white" />
           </div>
-          <h3 className="text-xl font-semibold text-black">{t('analysisHistory.title')}</h3>
+          <h3 className="text-xl font-semibold text-black">{t('analysisHistory.title')} <span className="text-sm font-normal text-stone-500">({history.length})</span></h3>
         </div>
         <svg
           aria-hidden="true"
@@ -71,7 +71,7 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
       </button>
 
       {isExpanded && (
-        <div id="history-content" className="px-6 pb-6 animate-fade-in">
+        <div id="history-content" className="px-4 sm:px-6 pb-6 animate-fade-in">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
             <div className="relative flex-1">
               <input
@@ -112,16 +112,15 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
                 {sortedHistory.map((entry) => (
                   <li
                     key={entry.id}
-                    onClick={() => onSelect(entry.id)}
-                    className="group flex justify-between items-center gap-3 p-3 rounded-xl cursor-pointer hover:bg-gray-100 transition-colors"
+                    className="group flex justify-between items-center gap-3 p-3 rounded-xl hover:bg-gray-100 transition-colors"
                   >
-                    <p className="flex-1 min-w-0 truncate text-sm text-gray-700">
-                      {entry.text}
-                    </p>
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    <button onClick={() => onSelect(entry.id)} className="flex-1 min-w-0 min-h-11 text-left text-sm text-gray-700 hover:text-black" title={entry.text}>
+                      <span className="block truncate">{entry.text}</span>
+                    </button>
+                    <div className="flex items-center gap-0 sm:gap-1.5 shrink-0">
                       {typeof entry.score === 'number' && (
                         <span
-                          className={`px-2 py-0.5 text-xs font-semibold rounded-full border ${scoreBadgeClass(entry.score)}`}
+                          className={`hidden sm:inline-block px-2 py-0.5 text-xs font-semibold rounded-full border ${scoreBadgeClass(entry.score)}`}
                           title={t('analysisHistory.scoreBadge')}
                         >
                           {entry.score}
@@ -129,7 +128,7 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
                       )}
                       {typeof entry.gapScore === 'number' && (
                         <span
-                          className="px-2 py-0.5 text-xs font-semibold rounded-full border bg-stone-800 text-white border-stone-800"
+                          className="hidden sm:inline-block px-2 py-0.5 text-xs font-semibold rounded-full border bg-stone-800 text-white border-stone-800"
                           title={t('analysisHistory.gapScoreBadge')}
                         >
                           {entry.gapScore}
@@ -138,8 +137,8 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
                       {onReanalyze && (
                         <button
                           onClick={(e) => handleReanalyze(e, entry.id)}
-                          className="p-1 rounded-full text-gray-400 hover:text-black hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                          aria-label={t('analysisHistory.reanalyzeLabel')}
+                          className="p-3 rounded-full text-gray-400 hover:text-black hover:bg-gray-200 opacity-100 transition-opacity"
+                          aria-label={`${t('analysisHistory.reanalyzeLabel')}: ${entry.text}`}
                           title={t('analysisHistory.reanalyzeLabel')}
                         >
                           <RefreshIcon className="h-4 w-4" />
@@ -147,8 +146,8 @@ const AnalysisHistory: React.FC<AnalysisHistoryProps> = ({ history, onSelect, on
                       )}
                       <button
                         onClick={(e) => handleDelete(e, entry.id)}
-                        className="p-1 rounded-full text-gray-400 hover:text-black hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
-                        aria-label={t('analysisHistory.deleteLabel')}
+                        className="p-3 rounded-full text-gray-400 hover:text-black hover:bg-gray-200 opacity-100 transition-opacity"
+                        aria-label={`${t('analysisHistory.deleteLabel')}: ${entry.text}`}
                       >
                         <TrashIcon className="h-4 w-4" />
                       </button>

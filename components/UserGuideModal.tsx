@@ -1,5 +1,6 @@
 import React from 'react';
 import { useI18n } from '../hooks/useI18n';
+import { useDialog } from '../hooks/useDialog';
 import { XIcon } from './icons/Icons';
 
 interface UserGuideModalProps {
@@ -23,6 +24,7 @@ const GuideSection: React.FC<{ icon: string; title: string; description: string;
 
 const UserGuideModal: React.FC<UserGuideModalProps> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
+  const dialogRef = useDialog(isOpen, onClose);
 
   if (!isOpen) return null;
 
@@ -30,12 +32,14 @@ const UserGuideModal: React.FC<UserGuideModalProps> = ({ isOpen, onClose }) => {
     <div
       className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in"
       onClick={onClose}
+      ref={dialogRef}
+      tabIndex={-1}
       role="dialog"
       aria-modal="true"
       aria-labelledby="guide-modal-title"
     >
       <div
-        className="bg-white p-8 max-w-2xl w-full mx-4 text-left relative animate-reveal-scale rounded-2xl shadow-floating"
+        className="bg-white p-5 sm:p-8 max-h-[90dvh] overflow-y-auto max-w-2xl w-full mx-4 text-left relative animate-reveal-scale rounded-2xl shadow-floating"
         onClick={(e) => e.stopPropagation()}
       >
         <button

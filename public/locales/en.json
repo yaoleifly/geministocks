@@ -1,9 +1,9 @@
 {
   "meta": {
     "title": "Super Digger | AI-Powered Investment Research & Stock Analysis Tool",
-    "description": "Using Google Gemini AI, Super Digger instantly transforms any financial news or topic into an in-depth investment analysis report. Covering macro, industry chain, fundamentals, and market sentiment to help you find opportunities in US, HK, and A-share markets.",
+    "description": "Using your chosen AI model, Super Digger instantly transforms any financial news or topic into an in-depth investment analysis report. Covering macro, industry chain, fundamentals, and market sentiment to help you find opportunities in US, HK, and A-share markets.",
     "ogTitle": "Super Digger | AI-Powered Investment Research & Stock Analysis Tool",
-    "ogDescription": "Using Google Gemini AI, Super Digger instantly transforms any financial news or topic into an in-depth investment analysis report. Covering macro, industry chain, fundamentals, and market sentiment to help you find opportunities in US, HK, and A-share markets."
+    "ogDescription": "Using your chosen AI model, Super Digger instantly transforms any financial news or topic into an in-depth investment analysis report. Covering macro, industry chain, fundamentals, and market sentiment to help you find opportunities in US, HK, and A-share markets."
   },
   "header": {
     "title": "Super Digger",
@@ -44,9 +44,9 @@
     "openSource": "Open Source on GitHub",
     "deployOwn": "Deploy your own:",
     "deployVercel": "Deploy to Vercel",
-    "deployVercelHint": "One-click clone and deploy to Vercel (recommended, API proxies work out of the box)",
+    "deployVercelHint": "Clone and deploy to Vercel",
     "deployCloudflare": "Deploy to Cloudflare",
-    "deployCloudflareHint": "Deploy to Cloudflare (API proxies require manual setup)"
+    "deployCloudflareHint": "Deploy to Cloudflare Workers with built-in API proxies"
   },
   "imageModal": {
     "title": "Welcome to follow \"Xiaosheng Dushu\""

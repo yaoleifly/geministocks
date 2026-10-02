@@ -98,7 +98,8 @@ function mapAnySearchResult(r: any): ExaResult {
 async function searchAnySearch(
   query: string,
   numResults: number,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<{ ok: boolean; results: ExaResult[]; message: string }> {
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -106,6 +107,7 @@ async function searchAnySearch(
 
     const response = await fetch(ANYSEARCH_SEARCH_URL, {
       method: 'POST',
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
       headers,
       body: JSON.stringify({
         query,
@@ -127,6 +129,7 @@ async function searchAnySearch(
     const rawResults: any[] = Array.isArray(data?.data?.results) ? data.data.results : [];
     return { ok: true, results: rawResults.map(mapAnySearchResult), message: '' };
   } catch (err) {
+    signal?.throwIfAborted();
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, results: [], message: msg };
   }
@@ -136,7 +139,8 @@ async function searchAnySearch(
 async function searchExaProvider(
   query: string,
   numResults: number,
-  apiKey: string
+  apiKey: string,
+  signal?: AbortSignal
 ): Promise<{ ok: boolean; results: ExaResult[]; message: string }> {
   if (!apiKey) {
     return { ok: false, results: [], message: 'Exa API key not configured' };
@@ -145,6 +149,7 @@ async function searchExaProvider(
   try {
     const response = await fetch(EXA_SEARCH_URL, {
       method: 'POST',
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(20_000)]) : AbortSignal.timeout(20_000),
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
@@ -176,6 +181,7 @@ async function searchExaProvider(
 
     return { ok: true, results, message: '' };
   } catch (err) {
+    signal?.throwIfAborted();
     const msg = err instanceof Error ? err.message : String(err);
     return { ok: false, results: [], message: msg };
   }
@@ -188,13 +194,14 @@ async function searchExaProvider(
  */
 export async function searchExa(
   query: string,
-  numResults = 6
+  numResults = 6,
+  signal?: AbortSignal
 ): Promise<{ ok: boolean; results: ExaResult[]; message: string }> {
   const config = getExaConfig();
   if (config.provider === 'anysearch') {
-    return searchAnySearch(query, numResults, config.anysearchApiKey);
+    return searchAnySearch(query, numResults, config.anysearchApiKey, signal);
   }
-  return searchExaProvider(query, numResults, config.apiKey);
+  return searchExaProvider(query, numResults, config.apiKey, signal);
 }
 
 /**

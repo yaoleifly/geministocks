@@ -48,27 +48,6 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#111111" />
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script type="importmap">
-{
-  "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.19.0",
-    "react/": "https://aistudiocdn.com/react@^19.1.1/",
-    "react": "https://aistudiocdn.com/react@^19.1.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
-    "react-router": "https://aistudiocdn.com/react-router@^6.25.1",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^6.25.1",
-    "html-to-image": "https://aistudiocdn.com/html-to-image@^1.11.11",
-    "recharts": "https://aistudiocdn.com/recharts@^2.12.7",
-    "crypto": "https://aistudiocdn.com/crypto@^1.0.1",
-    "uuid": "https://cdn.jsdelivr.net/npm/uuid@9.0.1/+esm",
-    "@stripe/stripe-js": "https://cdn.jsdelivr.net/npm/@stripe/stripe-js@^4.9.0/+esm",
-    "@stripe/react-stripe-js": "https://cdn.jsdelivr.net/npm/@stripe/react-stripe-js@^3.1.0/+esm",
-    "stripe": "https://aistudiocdn.com/stripe@^19.1.0",
-    "jsonrepair": "https://cdn.jsdelivr.net/npm/jsonrepair@3.6.0/+esm"
-  }
-}
-</script>
     <style>
       :focus-visible {
         outline: 2px solid #ED702E;
@@ -223,6 +202,10 @@
       }
       .radar-sweep {
         animation: radar-sweep 3s linear infinite;
+      }
+      :focus-visible { outline: 2px solid #292524; outline-offset: 3px; }
+      @media (prefers-reduced-motion: reduce) {
+        *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
       }
     </style>
     <!-- Structured Data -->

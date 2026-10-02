@@ -1,6 +1,11 @@
 import React, { createContext, useState, useContext, useMemo, useCallback, useEffect } from 'react';
 
+import enTranslations from '../public/locales/en.json';
+import zhTranslations from '../public/locales/zh.json';
+
 export type Locale = 'en' | 'zh';
+
+const translations = { en: enTranslations, zh: zhTranslations };
 
 const DEFAULT_LOCALE: Locale = 'zh';
 const LOCAL_STORAGE_KEY = 'gemini-app-locale';
@@ -50,31 +55,6 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return browserLang === 'zh' ? 'zh' : 'en';
   });
 
-  const [translations, setTranslations] = useState<Record<Locale, any> | null>(null);
-
-  useEffect(() => {
-    const loadTranslations = async () => {
-      try {
-        const [enResponse, zhResponse] = await Promise.all([
-          fetch('/locales/en.json'),
-          fetch('/locales/zh.json')
-        ]);
-        if (!enResponse.ok || !zhResponse.ok) {
-          throw new Error(`Failed to fetch translation files: en ${enResponse.status}, zh ${zhResponse.status}`);
-        }
-        const enData = await enResponse.json();
-        const zhData = await zhResponse.json();
-        setTranslations({ en: enData, zh: zhData });
-      } catch (error) {
-        console.error('Failed to load translation files:', error);
-        // Fallback to empty to prevent crash, but translations will be missing
-        setTranslations({ en: {}, zh: {} });
-      }
-    };
-
-    loadTranslations();
-  }, []);
-
   const setLocale = useCallback((newLocale: Locale) => {
     setLocaleState(newLocale);
     try {
@@ -110,7 +90,7 @@ export const I18nProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     return text;
-  }, [locale, translations]);
+  }, [locale]);
   
   const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
 

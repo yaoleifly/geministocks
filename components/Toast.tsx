@@ -27,10 +27,10 @@ const Toast: React.FC<{ message: string; type: 'success' | 'info' }> = ({ messag
   const config = toastConfig[type];
 
   return (
-    <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50">
+    <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 w-[calc(100%-2rem)] max-w-sm">
       <div
         className={`flex items-center gap-x-2.5 max-w-sm px-4 py-2.5 rounded-2xl border-l-4 shadow-floating bg-white animate-toast-in ${config.borderColor}`}
-        role="alert"
+        role="status"
       >
         <div className={`flex-shrink-0 rounded-full p-1 ${config.iconBg} ${config.iconColor}`}>
           {config.icon}

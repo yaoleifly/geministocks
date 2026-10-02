@@ -72,15 +72,7 @@ class CacheManager<T> {
    * 生成缓存键 - 基于查询内容进行哈希
    */
   private generateKey(query: string): string {
-    // 简单的哈希函数，将查询正规化后生成键
-    const normalized = query.toLowerCase().trim()
-    let hash = 0
-    for (let i = 0; i < normalized.length; i++) {
-      const char = normalized.charCodeAt(i)
-      hash = ((hash << 5) - hash) + char
-      hash = hash & hash // 转换为 32-bit 整数
-    }
-    return `cache_${Math.abs(hash).toString(36)}`
+    return query.trim()
   }
 
   /**

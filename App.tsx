@@ -1,16 +1,16 @@
 
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 // Use streaming service with fallback to legacy
-import { 
-  getAnalysisWithStreaming, 
+import {
+  getAnalysisWithStreaming,
   getPolymarketAnalysis
 } from './services/streamingService';
 import type { AnalysisReport, TopicHistoryEntry } from './types';
 import AnalysisInput from './components/AnalysisInput';
-import Loader from './components/Loader';
-import StreamingLoader from './components/StreamingLoader';
+import AnalysisProgress from './components/AnalysisProgress';
+import { readStored, writeStored } from './utils/browserStorage';
 import AnalysisHistory from './components/AnalysisHistory';
 import { CacheStats } from './components/CacheStats';
 import AppHeader from './components/AppHeader';
@@ -36,6 +36,7 @@ const AboutPage = lazy(() => import('./components/AboutPage'));
 const TOPIC_HISTORY_STORAGE_KEY = 'gemini-analysis-history';
 const USER_ANALYSIS_COUNT_KEY = 'gemini-user-analysis-count';
 const USER_ID_KEY = 'gemini-user-id';
+const DRAFT_KEY = 'gemini-analysis-draft';
 
 
 // --- User Helper Functions ---
@@ -57,16 +58,29 @@ const MainPage: React.FC = () => {
   const { t, locale } = useI18n();
 
   // State for Topic Analysis
-  const [userInput, setUserInput] = useState<string>('');
+  const [userInput, setUserInput] = useState<string>(() => readStored(DRAFT_KEY, '', (value): value is string => typeof value === 'string'));
   const [analysisReport, setAnalysisReport] = useState<AnalysisReport | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [topicHistory, setTopicHistory] = useState<TopicHistoryEntry[]>([]);
   const [topicProgress, setTopicProgress] = useState<number>(0);
-  
-  // Streaming Progress State
-  const [streamingTopicProgress, setStreamingTopicProgress] = useState<number>(0);
-  const [partialTopicData, setPartialTopicData] = useState<Partial<AnalysisReport> | null>(null);
+
+  const activeRequest = useRef<AbortController | null>(null);
+  const [reportTopic, setReportTopic] = useState('');
+  const [draftSaved, setDraftSaved] = useState(false);
+  const [deletedHistory, setDeletedHistory] = useState<TopicHistoryEntry[] | null>(null);
+  const [failedTopic, setFailedTopic] = useState('');
+  const statusRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDraftSaved(false);
+    const timer = setTimeout(() => setDraftSaved(writeStored(DRAFT_KEY, userInput)), 300);
+    return () => { clearTimeout(timer); writeStored(DRAFT_KEY, userInput); };
+  }, [userInput]);
+  useEffect(() => () => { activeRequest.current?.abort(); }, []);
+  useEffect(() => {
+    if (isLoading || error || analysisReport) statusRef.current?.focus({ preventScroll: true });
+  }, [isLoading, error, analysisReport]);
 
   // Common State
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'info' } | null>(null);
@@ -77,9 +91,9 @@ const MainPage: React.FC = () => {
   // User API Settings State
   const [isApiSettingsOpen, setIsApiSettingsOpen] = useState(false);
   const [apiConfigured, setApiConfigured] = useState<boolean>(false);
-  
 
-  
+
+
   // Effect to hide toast after a delay
   useEffect(() => {
     if (toast) {
@@ -97,21 +111,14 @@ const MainPage: React.FC = () => {
     // Check whether the user has configured their API settings
     setApiConfigured(isApiConfigured());
 
-    // Load history and settings from localStorage
-    try {
-      const storedTopicHistory = localStorage.getItem(TOPIC_HISTORY_STORAGE_KEY);
-      if (storedTopicHistory) setTopicHistory(JSON.parse(storedTopicHistory));
+    setTopicHistory(readStored<TopicHistoryEntry[]>(TOPIC_HISTORY_STORAGE_KEY, [],
+      (value): value is TopicHistoryEntry[] => Array.isArray(value) && value.every(entry =>
+        entry && typeof entry.id === 'number' && typeof entry.topic === 'string' && entry.report && typeof entry.report === 'object')));
+    setUserAnalysisCount(readStored(USER_ANALYSIS_COUNT_KEY, 0,
+      (value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0));
 
-      const storedUserCount = localStorage.getItem(USER_ANALYSIS_COUNT_KEY);
-      if (storedUserCount) {
-        setUserAnalysisCount(JSON.parse(storedUserCount));
-      }
-
-    } catch (err) {
-      console.error("Failed to load from localStorage", err);
-    }
   }, []);
-  
+
 
 
   // SEO: Set meta tags and html lang
@@ -141,13 +148,15 @@ const MainPage: React.FC = () => {
 
   const updateTopicHistory = (newHistory: TopicHistoryEntry[]) => {
     setTopicHistory(newHistory);
-    localStorage.setItem(TOPIC_HISTORY_STORAGE_KEY, JSON.stringify(newHistory));
+    if (!writeStored(TOPIC_HISTORY_STORAGE_KEY, newHistory)) {
+      setToast({ message: locale === 'zh' ? '浏览器存储已满或不可用。报告仍可查看，请及时导出。' : 'Browser storage is full or unavailable. Your report is still available; export it to keep a copy.', type: 'info' });
+    }
   };
 
   const incrementUserAnalysisCount = () => {
     setUserAnalysisCount(prevCount => {
         const newCount = prevCount + 1;
-        localStorage.setItem(USER_ANALYSIS_COUNT_KEY, JSON.stringify(newCount));
+        writeStored(USER_ANALYSIS_COUNT_KEY, newCount);
         return newCount;
     });
   };
@@ -157,52 +166,61 @@ const MainPage: React.FC = () => {
       setError(null);
   }
 
-  const handleAnalyze = useCallback(async (topic: string) => {
+  const handleAnalyze = useCallback(async (topic: string, fresh = false) => {
+    if (activeRequest.current) return;
+    topic = topic.trim();
     if (!topic.trim()) { setError(t('errors.emptyTopic')); return; }
     if (!ensureApiConfigured()) return;
 
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setIsLoading(true);
-    handleClearAllResults();
+    setError(null);
+    setFailedTopic(topic);
     setTopicProgress(0);
-    setStreamingTopicProgress(0);
-    setPartialTopicData(null);
 
     try {
         const isPolymarketUrl = /^https?:\/\/polymarket\.com\//.test(topic.trim());
-        
+
         let report: AnalysisReport;
         if (isPolymarketUrl) {
-            report = await getPolymarketAnalysis(topic, locale);
+            report = await getPolymarketAnalysis(topic, locale, controller.signal);
         } else {
-            // Use streaming analysis with progress callback
-            report = await getAnalysisWithStreaming(
-                topic, 
-                setTopicProgress, 
-                locale,
-                (progress, data) => {
-                    setStreamingTopicProgress(progress);
-                    setPartialTopicData(data);
-                }
-            );
+            report = await getAnalysisWithStreaming(topic, step => {
+              if (activeRequest.current === controller) setTopicProgress(step);
+            }, locale, undefined, { signal: controller.signal, fresh });
         }
-        
+
+        if (activeRequest.current !== controller) return;
         setAnalysisReport(report);
+        setReportTopic(topic);
         incrementUserAnalysisCount();
 
         const newEntry: TopicHistoryEntry = { id: Date.now(), topic, report };
         const newHistory = [newEntry, ...topicHistory].slice(0, 20);
         updateTopicHistory(newHistory);
     } catch (err) {
+        if (activeRequest.current !== controller || controller.signal.aborted) return;
+        controller.abort();
         console.error(err);
         const errorMessage = err instanceof Error ? t('errors.analysisFailed', { message: err.message }) : t('errors.unknownError');
         setError(errorMessage);
     } finally {
-        setIsLoading(false);
-        setTopicProgress(0);
-        setStreamingTopicProgress(0);
-        setPartialTopicData(null);
+        if (activeRequest.current === controller) {
+          activeRequest.current = null;
+          setIsLoading(false);
+          setTopicProgress(0);
+        }
     }
   }, [topicHistory, locale, t]);
+
+  const handleCancel = () => {
+    activeRequest.current?.abort();
+    activeRequest.current = null;
+    setIsLoading(false);
+    setTopicProgress(0);
+    setToast({ message: locale === 'zh' ? '已停止等待，输入内容已保留。服务商可能仍处理已接收的请求。' : 'Stopped waiting. Your input is preserved. The provider may still process accepted requests.', type: 'info' });
+  };
 
   const handleNewsSelect = (newsTopic: string) => {
     setUserInput(newsTopic);
@@ -224,10 +242,12 @@ const MainPage: React.FC = () => {
     setUserInput(entry.topic);
     handleClearAllResults();
     setAnalysisReport(entry.report);
+    setReportTopic(entry.topic);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleDeleteTopicHistory = (id: number) => {
+    setDeletedHistory(topicHistory);
     const newHistory = topicHistory.filter((entry) => entry.id !== id);
     updateTopicHistory(newHistory);
   };
@@ -238,15 +258,23 @@ const MainPage: React.FC = () => {
     if (!entry) return;
     setUserInput(entry.topic);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    handleAnalyze(entry.topic);
+    handleAnalyze(entry.topic, true);
   };
 
   const handleClearTopicHistory = () => {
+    setDeletedHistory(topicHistory);
     updateTopicHistory([]);
   };
 
+  const handleUndoHistory = () => {
+    if (!deletedHistory) return;
+    const restored = new Map([...deletedHistory, ...topicHistory].map(entry => [entry.id, entry]));
+    updateTopicHistory(Array.from(restored.values()).sort((a, b) => b.id - a.id).slice(0, 20));
+    setDeletedHistory(null);
+  };
+
   const showLatestNews = locale === 'zh';
-  
+
   const isLoadingAny = isLoading;
 
   return (
@@ -261,9 +289,9 @@ const MainPage: React.FC = () => {
         <Suspense fallback={null}>
           <ApiSettingsModal
             isOpen={isApiSettingsOpen}
-            onClose={() => setIsApiSettingsOpen(false)}
+            onClose={() => { setIsApiSettingsOpen(false); setApiConfigured(isApiConfigured()); }}
             onSaved={() => {
-              setApiConfigured(true);
+              setApiConfigured(isApiConfigured());
               setToast({
                 message: locale === 'zh' ? '模型已配置成功，现在可以开始分析了' : 'Model configured successfully. You can start analyzing now.',
                 type: 'success',
@@ -290,17 +318,18 @@ const MainPage: React.FC = () => {
         />
 
         <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
-          <main>
+          <main id="main-content">
+            <a href="#news-input" onClick={event => { event.preventDefault(); document.getElementById('news-input')?.focus(); }} className="sr-only focus:not-sr-only focus:block focus:mb-4">{locale === 'zh' ? '跳到分析输入' : 'Skip to analysis input'}</a>
             {!apiConfigured && (
-              <div className="mb-8 rounded-2xl border border-amber-200 bg-amber-50 p-5 sm:p-6 animate-fade-in" role="region" aria-label={locale === 'zh' ? '配置引导' : 'Setup guide'}>
+              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5 animate-fade-in" role="region" aria-label={locale === 'zh' ? '配置引导' : 'Setup guide'}>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+                  <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.077-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
                   </div>
-                  <div className="flex-1 text-center sm:text-left">
+                  <div className="flex-1 text-left">
                     <h2 className="text-base font-semibold text-amber-900 text-balance">
                       {locale === 'zh' ? '请先配置分析模型' : 'Configure a model to start'}
                     </h2>
@@ -328,52 +357,16 @@ const MainPage: React.FC = () => {
                       setUserInput={setUserInput}
                       onAnalyze={() => handleAnalyze(userInput)}
                       isLoading={isLoading}
+                      apiConfigured={apiConfigured}
+                      draftSaved={draftSaved}
                     />
                 </div>
 
-                {/* --- RESULTS / DASHBOARD --- */}
-                {isLoadingAny ? (
-                  <>
-                    {/* Show streaming loader with progress when streaming data is available */}
-                    {streamingTopicProgress > 0 ? (
-                      <StreamingLoader
-                        progress={streamingTopicProgress}
-                        isStreaming={isLoading}
-                        type="topic"
-                      />
-                    ) : (
-                      <Loader 
-                        taskType="topic"
-                        currentStep={topicProgress}
-                      />
-                    )}
-                  </>
-                ) : error ? (
-                    <div role="alert" className="bg-red-50 border-2 border-red-200 text-red-800 px-6 py-4 text-center rounded-lg">
-                        <p className="font-semibold">{t('errors.title')}</p>
-                        <p className="text-sm mt-1">{error}</p>
-                    </div>
-                ) : analysisReport ? (
-                    <Suspense fallback={<Loader taskType="topic" currentStep={3} />}>
-                      <AnalysisResult 
-                          report={analysisReport} 
-                          userInput={userInput} 
-                          onNewAnalysis={handleNewAnalysis}
-                      />
-                    </Suspense>
-                ) : (
-                  // DASHBOARD VIEW: indicators first (zero-config value), then news, then history
-                  <div className="space-y-8 animate-fade-in">
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-                      <MarketThermometer sources={NEWS_SOURCES} />
-                      <TacoMonitor sources={NEWS_SOURCES} />
-                    </div>
-                    <div className="grid grid-cols-1 gap-8 items-start">
-                      {showLatestNews && <LatestNews 
-                        onAnalyze={handleNewsSelect} 
-                        sources={NEWS_SOURCES}
-                      />}
-                    </div>
+                {!isLoading && <>
+                  {deletedHistory && <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
+                    <span>{locale === 'zh' ? '历史记录已删除' : 'History removed'}</span>
+                    <button className="min-h-11 px-3 font-semibold underline" onClick={handleUndoHistory}>{locale === 'zh' ? '撤销删除' : 'Undo deletion'}</button>
+                  </div>}
                      <AnalysisHistory
                         history={topicHistory.map(h => ({
                           id: h.id,
@@ -386,11 +379,53 @@ const MainPage: React.FC = () => {
                         onClear={handleClearTopicHistory}
                         onReanalyze={handleReanalyzeTopicHistory}
                       />
+                </>}
+
+                {/* --- RESULTS / DASHBOARD --- */}
+                <div ref={statusRef} tabIndex={-1} role="region" aria-label={locale === 'zh' ? '分析结果与状态' : 'Analysis results and status'} className="outline-none scroll-mt-6">
+                {isLoadingAny ? (
+                  <AnalysisProgress completed={topicProgress} onCancel={handleCancel} prediction={/^https?:\/\/polymarket\.com\//.test(failedTopic)} />
+                ) : error ? (
+                    <div role="alert" className="bg-red-50 border-2 border-red-200 text-red-800 px-6 py-4 text-center rounded-lg">
+                        <p className="font-semibold">{t('errors.title')}</p>
+                        <p className="text-sm mt-1 break-words">{error}</p>
+                        <p className="mt-2 text-sm">{locale === 'zh' ? '你的输入已保留，可以重试或调整模型设置。' : 'Your input is preserved. Retry or adjust your model settings.'}</p>
+                        <div className="mt-4 flex flex-wrap justify-center gap-3">
+                          <button onClick={() => handleAnalyze(failedTopic, true)} className="min-h-11 rounded-xl bg-red-800 px-4 text-sm font-medium text-white">{locale === 'zh' ? '重试分析' : 'Retry analysis'}</button>
+                          <button onClick={() => setIsApiSettingsOpen(true)} className="min-h-11 rounded-xl border border-red-300 px-4 text-sm">{locale === 'zh' ? '检查模型设置' : 'Model settings'}</button>
+                          {analysisReport && <button onClick={() => setError(null)} className="min-h-11 px-4 text-sm underline">{locale === 'zh' ? '返回上一份报告' : 'Return to previous report'}</button>}
+                        </div>
+                    </div>
+                ) : analysisReport ? (
+                    <Suspense fallback={<p role="status" className="p-6 text-center text-sm text-stone-500">{locale === 'zh' ? '正在打开报告…' : 'Opening your report…'}</p>}>
+                      <AnalysisResult
+                          report={analysisReport}
+                          userInput={reportTopic}
+                          onNewAnalysis={handleNewAnalysis}
+                      />
+                    </Suspense>
+                ) : (
+                  // Offer readable news before the deeper market indicators.
+                  <div className="space-y-8 animate-fade-in">
+                    <div className="grid grid-cols-1 gap-8 items-start">
+                      {showLatestNews && <LatestNews
+                        onAnalyze={handleNewsSelect}
+                        sources={NEWS_SOURCES}
+                      />}
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                      <MarketThermometer sources={NEWS_SOURCES} />
+                      <TacoMonitor sources={NEWS_SOURCES} />
+                    </div>
+
+
                   </div>
                 )}
+                </div>
+
             </div>
           </main>
-          
+
           <footer className="text-center mt-16 py-8 border-t border-gray-200">
              <div className="flex flex-wrap justify-center items-center gap-3 mb-6">
                 <span className="text-sm text-gray-500">{t('footer.deployOwn')}</span>

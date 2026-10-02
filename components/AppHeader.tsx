@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AcademicCapIcon } from './icons/Icons';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '../hooks/useI18n';
@@ -23,6 +23,16 @@ interface AppHeaderProps {
 
 const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, onOpenApiSettings }) => {
   const { t, locale } = useI18n();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const outside = (event: PointerEvent) => { if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false); };
+    const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { setMenuOpen(false); menuRef.current?.querySelector('button')?.focus(); } };
+    document.addEventListener('pointerdown', outside);
+    document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
+  }, [menuOpen]);
 
   return (
     <header className="sticky top-0 z-30 w-full bg-[#FBFBFA]/80 backdrop-blur-sm border-b border-stone-200/90">
@@ -37,12 +47,12 @@ const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, o
           </div>
 
           {/* Right side: Controls */}
-          <div className="flex items-center gap-x-4 sm:gap-x-6">
+          <div className="flex items-center gap-x-2 sm:gap-x-6">
             <a
               href="https://h5.fotechwealth.com/pages/startAccount.html?channel=030003&aeCode=B2&invitationCode=997NQD&langType=zhCn"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-x-1.5 text-xs sm:text-sm font-medium bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
+              className="hidden sm:flex min-h-11 items-center gap-x-1.5 text-xs sm:text-sm font-medium bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
             >
               <span>{locale === 'zh' ? '开户' : 'Open Account'}</span>
             </a>
@@ -50,13 +60,13 @@ const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, o
               href="https://stocks.mastersgo.cc"
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-x-1.5 text-xs sm:text-sm font-medium bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
+              className="hidden sm:flex min-h-11 items-center gap-x-1.5 text-xs sm:text-sm font-medium bg-blue-50 text-blue-600 px-3 py-1 rounded-full hover:bg-blue-100 transition-colors border border-blue-200 shadow-sm"
             >
               <span>{locale === 'zh' ? '图谱' : 'Industry Map'}</span>
             </a>
             <button
               onClick={onOpenUserGuide}
-              className="hidden sm:flex items-center gap-x-1.5 text-sm font-medium text-gray-600 hover:text-black transition-colors"
+              className="hidden sm:flex min-h-11 items-center gap-x-1.5 text-sm font-medium text-gray-600 hover:text-black transition-colors"
               aria-label={t('header.userGuide')}
             >
               <AcademicCapIcon className="w-5 h-5" />
@@ -65,7 +75,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, o
             {/* API Settings button */}
             <button
               onClick={onOpenApiSettings}
-              className={`flex items-center gap-x-1.5 text-xs sm:text-sm font-medium px-3 py-1 rounded-full border shadow-sm transition-colors ${
+              className={`min-h-11 flex items-center gap-x-1.5 text-xs sm:text-sm font-medium px-3 py-1 rounded-full border shadow-sm transition-colors ${
                 apiConfigured
                   ? 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
                   : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
@@ -78,6 +88,15 @@ const AppHeader: React.FC<AppHeaderProps> = ({ apiConfigured, onOpenUserGuide, o
               </svg>
               <span>{locale === 'zh' ? (apiConfigured ? '模型设置' : '配置模型') : (apiConfigured ? 'API Settings' : 'Setup API')}</span>
             </button>
+            <div ref={menuRef} className="relative sm:hidden">
+              <button onClick={() => setMenuOpen(open => !open)} aria-expanded={menuOpen} aria-controls="mobile-header-options" className="min-h-11 min-w-11 px-2 text-sm rounded-xl hover:bg-stone-100" aria-label={locale === 'zh' ? '更多选项' : 'More options'}>•••</button>
+              {menuOpen && <div id="mobile-header-options" className="absolute right-0 top-full mt-2 w-56 rounded-2xl border border-stone-200 bg-white p-3 shadow-lg">
+                <button onClick={() => { setMenuOpen(false); onOpenUserGuide(); }} className="w-full min-h-11 rounded-lg px-3 text-left text-sm hover:bg-stone-50">{t('header.userGuide')}</button>
+                <div className="py-2"><LanguageSwitcher /></div>
+                <a href="https://stocks.mastersgo.cc" target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center px-3 text-sm hover:bg-stone-50 rounded-lg">{locale === 'zh' ? '行业图谱 ↗' : 'Industry map ↗'}</a>
+                <a href="https://h5.fotechwealth.com/pages/startAccount.html?channel=030003&aeCode=B2&invitationCode=997NQD&langType=zhCn" target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center px-3 text-sm hover:bg-stone-50 rounded-lg">{locale === 'zh' ? '开户 ↗' : 'Open account ↗'}</a>
+              </div>}
+            </div>
             <div className="hidden sm:block">
               <LanguageSwitcher />
             </div>
