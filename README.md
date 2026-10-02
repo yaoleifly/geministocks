@@ -147,3 +147,7 @@ pnpm dev
 ### 许可证
 
 [MIT](LICENSE)
+
+## Cloudflare Workers deployment
+
+Build and deploy the SPA and API proxies together with `pnpm deploy`. For local validation run `pnpm dev:cloudflare`; no secrets are required for BYOM. See [Cloudflare migration guide](docs/CLOUDFLARE_MIGRATION.md) for Git integration, optional statistics secrets, domain cutover and rollback.
