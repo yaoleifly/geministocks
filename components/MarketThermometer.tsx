@@ -26,7 +26,7 @@ const loadStored = (): StoredState => {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     return {
       buffettPercentile: typeof raw.buffettPercentile === 'number' ? raw.buffettPercentile : null,
-      scan: raw.scan && typeof raw.scan.newsScore === 'number' ? raw.scan : null,
+      scan: raw.scan && !(raw.scan.engine === 'jev' && raw.scan.methodVersion !== 2) && typeof raw.scan.newsScore === 'number' ? raw.scan : null,
     };
   } catch {
     return { buffettPercentile: null, scan: null };
@@ -63,7 +63,7 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
     const stored = loadStored();
     setBuffettPercentile(stored.buffettPercentile);
     setScan(stored.scan);
-    setHistory(loadHistory(stored.scan?.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY));
+    setHistory(loadHistory(stored.scan?.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY));
     setAutoRefresh(loadAutoRefresh());
   }, []);
 
@@ -90,7 +90,7 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
       // Record the composite exit-pressure score (falls back to news score)
       const point = computeExitPressure(buffett, result.newsScore) ?? result.newsScore;
       const at = toEpochMs(result.scannedAt) ?? Date.now();
-      setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY, { at, value: point }));
+      setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY, { at, value: point }));
     } catch (err) {
       console.error('Thermometer scan failed:', err instanceof Error ? err.message : err);
       setScanError(err instanceof JevError ? jevErrorMessage(err, locale === 'zh') : t('thermometer.scanError'));

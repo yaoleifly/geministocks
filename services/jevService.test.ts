@@ -51,7 +51,7 @@ describe('Jev provider boundary', () => {
 });
 describe('evidence aggregation', () => {
   const articles = Array.from({ length: 4 }, (_, i) => ({ title: `News ${i}`, description: 'Evidence', sourceName: 'Source', url: `https://news.org/${i}` }));
-  const answers = (choices: string[]) => Object.fromEntries(Object.keys(indicatorQuestions('taco', 4)).map(id => [id, { type: 'choice', choice: choices[Number(id.split('_')[1])], confidence: .9 }]));
+  const answers = (choices: string[]) => Object.fromEntries(Object.keys(indicatorQuestions('taco', 4)).map(id => [id, { type: 'choice', choice: id.startsWith('coverage_') ? 'present' : choices[Number(id.split('_')[1])], confidence: .9 }]));
   it('excludes unknowns from prevalence and retains only supporting source references', () => {
     const signals = aggregateSignals('taco', articles, { model: 'jev-test', answers: answers(['present', 'absent', 'absent', 'unknown']) }, true);
     expect(signals[0]).toMatchObject({ strength: 33, evaluatedCount: 3, uncertainCount: 1 });
@@ -60,6 +60,11 @@ describe('evidence aggregation', () => {
   it('refuses partial or uncertain indicators rather than inventing zeroes', () => {
     expect(() => aggregateSignals('taco', articles, { model: 'jev-test', answers: answers(['present', 'unknown', 'unknown', 'unknown']) }, false)).toThrow('evidence');
     expect(() => aggregateSignals('taco', articles, { model: 'jev-test', answers: {} }, false)).toThrow('evidence');
+  });
+  it('rejects an irrelevant window even when every signal confidently returns absent', () => {
+    const data = answers(['absent', 'absent', 'absent', 'absent']);
+    for (const [id, value] of Object.entries(data)) if (id.startsWith('coverage_')) value.choice = 'absent';
+    expect(() => aggregateSignals('taco', articles, { model: 'jev-test', answers: data }, false)).toThrow('evidence');
   });
   it('rejects undated/stale windows before incurring API costs', async () => {
     const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);

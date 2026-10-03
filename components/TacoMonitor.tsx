@@ -19,7 +19,7 @@ const AUTO_REFRESH_TTL_MS = 6 * 60 * 60 * 1000;
 const loadStored = (): TacoScanResult | null => {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    return raw && Array.isArray(raw.signals) ? raw : null;
+    return raw && !(raw.engine === 'jev' && raw.methodVersion !== 2) && Array.isArray(raw.signals) ? raw : null;
   } catch {
     return null;
   }
@@ -62,7 +62,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
 
   useEffect(() => {
     setScan(loadStored());
-    setHistory(loadHistory(loadStored()?.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY));
+    setHistory(loadHistory(loadStored()?.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY));
     setAutoRefresh(loadAutoRefresh());
   }, []);
 
@@ -85,7 +85,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
       const decayPoint = computeEdgeDecay(result.signals);
       if (decayPoint != null) {
         const at = toEpochMs(result.scannedAt) ?? Date.now();
-        setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY, { at, value: decayPoint }));
+        setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY, { at, value: decayPoint }));
       }
     } catch (err) {
       console.error('TACO scan failed:', err instanceof Error ? err.message : err);
@@ -159,7 +159,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
           {phase && phaseResult ? (
             <span className="flex items-baseline gap-2">
               <span className={`text-base font-bold ${phaseStyle?.text}`}>{t(`taco.phase.${phase}`)}</span>
-              <span className="text-[10px] text-gray-400">{t('taco.confidence', { value: String(phaseResult.confidence) })}</span>
+              {scan?.engine !== 'jev' && <span className="text-[10px] text-gray-400">{t('taco.confidence', { value: String(phaseResult.confidence) })}</span>}
             </span>
           ) : (
             <span className="text-sm text-gray-400">{t('taco.noData')}</span>

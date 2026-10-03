@@ -10,7 +10,7 @@ The news panel evaluates up to eight currently displayed summaries on demand. An
 
 Indicator scans use up to 32 unique headlines with known publication dates within seven days. They preserve supporting URLs and publication dates. For each article and each existing signal, Jev chooses present / absent / unknown. Confidence below 0.6 is treated as unknown. Every signal requires at least three assessable articles and at least 50% window coverage. Otherwise no new indicator/history point is written and the UI retains prior results with an error. This is a conservative engineering threshold, not a calibrated accuracy claim.
 
-Strength is `100 * present / (present + absent)`. Unknowns are excluded, never treated as absent. The thermometer's news score is the equal-weight mean of its five strengths; existing gauge math then applies. This experimental news prevalence is NOT a stock probability or directly comparable with the previous model's holistic score. Jev history uses separate `*-history-jev-v1` storage keys. Title deduplication is not semantic event clustering: syndicated reports may still overrepresent a story.
+Strength is `100 * present / (present + absent)`. Unknowns are excluded, never treated as absent. The thermometer's news score is the equal-weight mean of its five strengths; existing gauge math then applies. This experimental news prevalence is NOT a stock probability or directly comparable with the previous model's holistic score. Jev history uses separate `*-history-jev-v2` storage keys. Title deduplication is not semantic event clustering: syndicated reports may still overrepresent a story.
 
 Fallback to the user's main model is off by default. When explicitly enabled, transport/response failures can use the configured main model, with a visible fallback label. Insufficient evidence never triggers automatic fallback. The original provider behavior is unchanged when Jev is off.
 
@@ -18,7 +18,7 @@ Fallback to the user's main model is off by default. When explicitly enabled, tr
 
 - `services/jevService.ts`: config, HTTP adapter, strict answer checks, abort/20-second timeout, 10-minute bounded memory cache, news questions.
 - `services/jevIndicatorService.ts`: focused per-article questions, freshness filter, evidence aggregation.
-- `worker/index.ts`: POST `/api/jev/evaluate`, fixed TypeSafe destination, required user key, same-origin gate, 200 KB body cap, 160-question cap, existing rate limiting and redirect rejection. No shared paid key or public funded endpoint.
+- `worker/index.ts`: POST `/api/jev/evaluate`, fixed TypeSafe destination, required user key, same-origin gate, 200 KB body cap, 192-question cap, existing rate limiting and redirect rejection. No shared paid key or public funded endpoint.
 - `components/JevSettings.tsx`, `JevNewsSignals.tsx`, `SignalEvidence.tsx`: bilingual settings, opt-in cards, source links and engine labels.
 - Vite forwards the same route in development. Use `pnpm dev:cloudflare` to exercise production validation locally.
 
@@ -33,3 +33,5 @@ Automated tests cover malformed responses, unknown values, absent dates, cancell
 Live provider performance and accuracy remain unverified until a real TypeSafe key is configured. Before broad adoption, label 200–500 representative Chinese/English articles with event type and signal presence/absence/insufficient evidence; group related events before train/evaluation time splits to prevent syndicated-news leakage. Compare against the main-model baseline: per-signal precision/recall, abstention and coverage rates, p50/p95 end-to-end latency and actual token cost. Tune thresholds on a development subset, then report on the held-out subset. Do not translate confidence into a claimed correctness percentage.
 
 Deployment should begin with a separate preview Worker. Review and verify with the user's TypeSafe account before merging to production. Cron-based monitoring, D1 persistence, shared billing and automatic trading are outside this release.
+
+Live preview testing (2026-10-03): user-configured TypeSafe connection and all three UI paths successfully returned jev-1.13.0. Found opinion/event confusion and unrelated-window zero scores; added an opinion category and a separate current factual relevance gate for every indicator article. Version 2 invalidates old experimental scores and separates history. This small smoke test is not the planned accuracy benchmark.

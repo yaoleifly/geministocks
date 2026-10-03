@@ -129,7 +129,7 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
         let body: Record<string, unknown>
         try { body = JSON.parse(new TextDecoder().decode(bytes)) } catch { return json({ error: 'Invalid JSON' }, 400) }
-        if (body.model !== 'jev-latest' || !body.state || !body.questions || typeof body.questions !== 'object' || Array.isArray(body.questions) || Object.keys(body.questions).length > 160 || !Object.keys(body.questions).length) return json({ error: 'Invalid evaluation' }, 400)
+        if (body.model !== 'jev-latest' || !body.state || !body.questions || typeof body.questions !== 'object' || Array.isArray(body.questions) || Object.keys(body.questions).length > 192 || !Object.keys(body.questions).length) return json({ error: 'Invalid evaluation' }, 400)
         const forwarded = new Request(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify({ model: body.model, state: body.state, questions: body.questions }) })
         return await proxy(forwarded, new URL('https://api.typesafe.ai/v1/systemone'), AbortSignal.timeout(20000))
       }
