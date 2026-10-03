@@ -1,3 +1,5 @@
+import { isJevEnabled, JevError, jevErrorMessage } from '../services/jevService';
+import SignalEvidence, { ScanEngine } from './SignalEvidence';
 import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { analyzeMarketSentiment } from '../services/geminiService';
@@ -61,7 +63,7 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
     const stored = loadStored();
     setBuffettPercentile(stored.buffettPercentile);
     setScan(stored.scan);
-    setHistory(loadHistory(HISTORY_KEY));
+    setHistory(loadHistory(stored.scan?.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY));
     setAutoRefresh(loadAutoRefresh());
   }, []);
 
@@ -88,17 +90,17 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
       // Record the composite exit-pressure score (falls back to news score)
       const point = computeExitPressure(buffett, result.newsScore) ?? result.newsScore;
       const at = toEpochMs(result.scannedAt) ?? Date.now();
-      setHistory(recordHistoryPoint(HISTORY_KEY, { at, value: point }));
+      setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v1` : HISTORY_KEY, { at, value: point }));
     } catch (err) {
       console.error('Thermometer scan failed:', err instanceof Error ? err.message : err);
-      setScanError(t('thermometer.scanError'));
+      setScanError(err instanceof JevError ? jevErrorMessage(err, locale === 'zh') : t('thermometer.scanError'));
     } finally {
       setIsScanning(false);
     }
   };
 
   const handleScan = async () => {
-    if (!isApiConfigured()) {
+    if ((!isApiConfigured() && !isJevEnabled())) {
       setScanError(t('thermometer.noApi'));
       return;
     }
@@ -110,7 +112,7 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
   useEffect(() => {
     if (autoScanTried.current) return;
     const stored = loadStored();
-    if (!loadAutoRefresh() || !isApiConfigured()) return;
+    if (!loadAutoRefresh() || (!isApiConfigured() && !isJevEnabled())) return;
     if (!isScanStale(stored.scan?.scannedAt, AUTO_REFRESH_TTL_MS)) return;
     autoScanTried.current = true;
     runScan(stored.buffettPercentile);
@@ -151,6 +153,8 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
       <p className="text-xs text-gray-500 mb-4">{t('thermometer.subtitle')}</p>
 
       {scanError && <p className="text-xs text-red-600 mb-3">{scanError}</p>}
+
+      {scan && <ScanEngine scan={scan} />}
 
       {/* Gauge */}
       <div className="mb-5">
@@ -261,6 +265,7 @@ const MarketThermometer: React.FC<{ sources: NewsSource[] }> = ({ sources }) => 
                       />
                     </div>
                     <p className="text-gray-500 leading-relaxed">{signal.evidence}</p>
+                    <SignalEvidence signal={signal} />
                   </li>
                 );
               })}

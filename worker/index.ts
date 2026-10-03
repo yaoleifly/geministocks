@@ -34,7 +34,7 @@ function limited(request: Request): boolean {
   buckets.set(ip, value)
   return ++value.count > 60
 }
-async function proxy(request: Request, target: URL): Promise<Response> {
+async function proxy(request: Request, target: URL, signal?: AbortSignal): Promise<Response> {
   if (!sameOrigin(request)) return json({ error: 'Forbidden: cross-site use of this proxy is not allowed' }, 403)
   if (!['GET', 'HEAD', 'POST', 'OPTIONS'].includes(request.method)) return json({ error: 'Method not allowed' }, 405)
   if (limited(request)) return json({ error: 'Too many requests, please slow down' }, 429)
@@ -48,7 +48,7 @@ async function proxy(request: Request, target: URL): Promise<Response> {
   const upstream = await fetch(target, {
     method: request.method, headers,
     body: ['GET', 'HEAD'].includes(request.method) ? undefined : request.body,
-    redirect: 'manual',
+    redirect: 'manual', signal,
   })
   // Do not follow redirects with provider credentials or expose another target.
   if (upstream.status >= 300 && upstream.status < 400) {
@@ -110,6 +110,29 @@ async function handleRequest(request: Request, env: Env): Promise<Response> {
       return Response.redirect(url.toString(), 308)
     }
     try {
+      if (url.pathname === '/api/jev/evaluate') {
+        if (request.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
+        if (!sameOrigin(request)) return json({ error: 'Forbidden' }, 403)
+        if (!/^Bearer \S+$/.test(request.headers.get('Authorization') || '')) return json({ error: 'User API key required' }, 401)
+        if (Number(request.headers.get('Content-Length') || 0) > 200000) return json({ error: 'Payload too large' }, 413)
+        const reader = request.body?.getReader()
+        if (!reader) return json({ error: 'Invalid body' }, 400)
+        const chunks: Uint8Array[] = []; let size = 0
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          size += value.byteLength
+          if (size > 200000) { await reader.cancel(); return json({ error: 'Payload too large' }, 413) }
+          chunks.push(value)
+        }
+        const bytes = new Uint8Array(size); let offset = 0
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length }
+        let body: Record<string, unknown>
+        try { body = JSON.parse(new TextDecoder().decode(bytes)) } catch { return json({ error: 'Invalid JSON' }, 400) }
+        if (body.model !== 'jev-latest' || !body.state || !body.questions || typeof body.questions !== 'object' || Array.isArray(body.questions) || Object.keys(body.questions).length > 160 || !Object.keys(body.questions).length) return json({ error: 'Invalid evaluation' }, 400)
+        const forwarded = new Request(request.url, { method: 'POST', headers: request.headers, body: JSON.stringify({ model: body.model, state: body.state, questions: body.questions }) })
+        return await proxy(forwarded, new URL('https://api.typesafe.ai/v1/systemone'), AbortSignal.timeout(20000))
+      }
       if (url.pathname === '/api/cors-proxy') {
         let target: URL
         try { target = new URL(url.searchParams.get('target') || '') } catch { return json({ error: 'Invalid or missing target URL' }, 400) }

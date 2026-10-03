@@ -1,3 +1,6 @@
+import { isJevEnabled, getJevConfig, JevError } from './jevService';
+import { scanWithJev } from './jevIndicatorService';
+import type { IndicatorArticle } from './indicatorNewsService';
 
 import type { AnalysisReport } from '../types';
 import type { Locale } from '../hooks/useI18n';
@@ -527,11 +530,20 @@ export const extractNewsConcepts = async (
  * Returns a 0-100 crowding score plus per-signal strength and evidence.
  */
 export const analyzeMarketSentiment = async (
-    articles: { title: string; description: string; sourceName: string }[],
+    articles: IndicatorArticle[],
     locale: Locale
 ): Promise<import('../utils/sentimentUtils').SentimentScanResult> => {
     if (articles.length === 0) {
         return { newsScore: 0, signals: [], scannedAt: new Date().toISOString(), articleCount: 0 };
+    }
+    let fallback = false;
+    if (isJevEnabled()) {
+        try { return await scanWithJev('sentiment', articles, locale === 'zh'); }
+        catch (error) {
+            if (error instanceof JevError && error.code === 'evidence') throw error;
+            if (!getJevConfig().fallback || !getApiConfig()) throw error;
+            fallback = true;
+        }
     }
     const data = await callOpenRouterAI(
         buildArticlePrompt(articles),
@@ -539,7 +551,7 @@ export const analyzeMarketSentiment = async (
         getModelName(),
         false
     );
-    return parseSentimentResponse(data, articles.length);
+    return { ...parseSentimentResponse(data, articles.length), ...(fallback ? { engine: 'llm-fallback' as const } : {}) };
 };
 
 /**
@@ -549,11 +561,20 @@ export const analyzeMarketSentiment = async (
  * = alpha decay). Pure phase/decay math lives in utils/tacoUtils.ts.
  */
 export const analyzeTacoSignals = async (
-    articles: { title: string; description: string; sourceName: string }[],
+    articles: IndicatorArticle[],
     locale: Locale
 ): Promise<import('../utils/tacoUtils').TacoScanResult> => {
     if (articles.length === 0) {
         return { signals: [], scannedAt: new Date().toISOString(), articleCount: 0 };
+    }
+    let fallback = false;
+    if (isJevEnabled()) {
+        try { return await scanWithJev('taco', articles, locale === 'zh'); }
+        catch (error) {
+            if (error instanceof JevError && error.code === 'evidence') throw error;
+            if (!getJevConfig().fallback || !getApiConfig()) throw error;
+            fallback = true;
+        }
     }
     const data = await callOpenRouterAI(
         buildArticlePrompt(articles),
@@ -561,5 +582,5 @@ export const analyzeTacoSignals = async (
         getModelName(),
         false
     );
-    return parseTacoResponse(data, articles.length);
+    return { ...parseTacoResponse(data, articles.length), ...(fallback ? { engine: 'llm-fallback' as const } : {}) };
 };
