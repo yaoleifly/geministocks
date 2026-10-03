@@ -1,3 +1,4 @@
+import JevNewsSignals from './JevNewsSignals';
 import { sanitizeNewsHtml } from '../utils/newsHtml';
 import { useDialog } from '../hooks/useDialog';
 import React, { useState, useEffect } from 'react';
@@ -478,6 +479,8 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
             </div>
           )}
         </div>
+        <JevNewsSignals articles={articles} onAnalyze={onAnalyze} />
+
         {extractError && (
           <p className="text-xs text-red-600 -mt-2 mb-3">{extractError}</p>
         )}

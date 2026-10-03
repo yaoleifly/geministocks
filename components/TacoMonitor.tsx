@@ -1,3 +1,5 @@
+import { isJevEnabled, JevError, jevErrorMessage } from '../services/jevService';
+import SignalEvidence, { ScanEngine } from './SignalEvidence';
 import React, { useState, useEffect, useRef } from 'react';
 import { useI18n } from '../hooks/useI18n';
 import { analyzeTacoSignals } from '../services/geminiService';
@@ -17,7 +19,7 @@ const AUTO_REFRESH_TTL_MS = 6 * 60 * 60 * 1000;
 const loadStored = (): TacoScanResult | null => {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    return raw && Array.isArray(raw.signals) ? raw : null;
+    return raw && !(raw.engine === 'jev' && raw.methodVersion !== 2) && Array.isArray(raw.signals) ? raw : null;
   } catch {
     return null;
   }
@@ -60,7 +62,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
 
   useEffect(() => {
     setScan(loadStored());
-    setHistory(loadHistory(HISTORY_KEY));
+    setHistory(loadHistory(loadStored()?.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY));
     setAutoRefresh(loadAutoRefresh());
   }, []);
 
@@ -83,18 +85,18 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
       const decayPoint = computeEdgeDecay(result.signals);
       if (decayPoint != null) {
         const at = toEpochMs(result.scannedAt) ?? Date.now();
-        setHistory(recordHistoryPoint(HISTORY_KEY, { at, value: decayPoint }));
+        setHistory(recordHistoryPoint(result.engine === 'jev' ? `${HISTORY_KEY}-jev-v2` : HISTORY_KEY, { at, value: decayPoint }));
       }
     } catch (err) {
       console.error('TACO scan failed:', err instanceof Error ? err.message : err);
-      setScanError(t('taco.scanError'));
+      setScanError(err instanceof JevError ? jevErrorMessage(err, locale === 'zh') : t('taco.scanError'));
     } finally {
       setIsScanning(false);
     }
   };
 
   const handleScan = async () => {
-    if (!isApiConfigured()) {
+    if ((!isApiConfigured() && !isJevEnabled())) {
       setScanError(t('taco.noApi'));
       return;
     }
@@ -106,7 +108,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
   useEffect(() => {
     if (autoScanTried.current) return;
     const stored = loadStored();
-    if (!loadAutoRefresh() || !isApiConfigured()) return;
+    if (!loadAutoRefresh() || (!isApiConfigured() && !isJevEnabled())) return;
     if (!isScanStale(stored?.scannedAt, AUTO_REFRESH_TTL_MS)) return;
     autoScanTried.current = true;
     runScan();
@@ -157,7 +159,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
           {phase && phaseResult ? (
             <span className="flex items-baseline gap-2">
               <span className={`text-base font-bold ${phaseStyle?.text}`}>{t(`taco.phase.${phase}`)}</span>
-              <span className="text-[10px] text-gray-400">{t('taco.confidence', { value: String(phaseResult.confidence) })}</span>
+              {scan?.engine !== 'jev' && <span className="text-[10px] text-gray-400">{t('taco.confidence', { value: String(phaseResult.confidence) })}</span>}
             </span>
           ) : (
             <span className="text-sm text-gray-400">{t('taco.noData')}</span>
@@ -223,6 +225,8 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
         )}
       </div>
 
+      {scan && <ScanEngine scan={scan} />}
+
       {/* Scan meta + signals detail */}
       {scan && (
         <p className="text-[10px] text-gray-400 mb-2">
@@ -259,6 +263,7 @@ const TacoMonitor: React.FC<{ sources: NewsSource[] }> = ({ sources }) => {
                       />
                     </div>
                     <p className="text-gray-500 leading-relaxed">{signal.evidence}</p>
+                    <SignalEvidence signal={signal} />
                   </li>
                 );
               })}

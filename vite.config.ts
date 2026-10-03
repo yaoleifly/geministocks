@@ -69,6 +69,10 @@ export default defineConfig(() => {
         host: '0.0.0.0',
         allowedHosts: true,
         proxy: {
+          '/api/jev/evaluate': {
+            target: 'https://api.typesafe.ai', changeOrigin: true, secure: true,
+            rewrite: () => '/v1/systemone',
+          },
           // Same-origin proxy for Ollama Cloud (ollama.com does not send CORS
           // headers, so the browser cannot call it directly). The frontend uses
           // a relative base URL "/ollama-api/v1" which is forwarded here.

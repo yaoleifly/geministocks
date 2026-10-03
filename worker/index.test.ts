@@ -73,3 +73,31 @@ describe('Cloudflare routing and proxy', () => {
     expect(fetchMock.mock.calls.map(([url]) => url)).toContain('https://stats.upstash.io/incr/globalPageViews')
   })
 })
+
+describe('Jev BYOK endpoint', () => {
+  const headers = { Origin: 'https://mastersgo.cc', Authorization: 'Bearer user-test-key', 'Content-Type': 'application/json', Cookie: 'private-cookie' };
+  const body = JSON.stringify({ model: 'jev-latest', state: { text: 'News' }, questions: { event: { type: 'choice', criteria: { a: 'A' }, instructions: 'Classify' } } });
+  it('requires same origin, POST and a user key without invoking a shared credential', async () => {
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    expect((await worker.fetch(request('/api/jev/evaluate'), { ASSETS: assets })).status).toBe(405);
+    expect((await worker.fetch(request('/api/jev/evaluate', { method: 'POST', headers: { ...headers, Origin: 'https://evil.org' }, body }), { ASSETS: assets })).status).toBe(403);
+    expect((await worker.fetch(request('/api/jev/evaluate', { method: 'POST', headers: { Origin: headers.Origin }, body }), { ASSETS: assets })).status).toBe(401);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+  it('pins provider URL and strips cookies', async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response('{"model":"jev-test"}')); vi.stubGlobal('fetch', fetcher);
+    const response = await worker.fetch(request('/api/jev/evaluate?target=https://evil.org', { method: 'POST', headers, body }), { ASSETS: assets });
+    expect(response.status).toBe(200);
+    expect(String(fetcher.mock.calls[0][0])).toBe('https://api.typesafe.ai/v1/systemone');
+    expect(fetcher.mock.calls[0][1].headers.get('Cookie')).toBeNull();
+    expect(fetcher.mock.calls[0][1].headers.get('Authorization')).toBe('Bearer user-test-key');
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+  it('rejects oversized bodies and invalid JSON before reaching the provider', async () => {
+    const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+    for (const [payload, status] of [['x'.repeat(200001), 413], ['{', 400], ['{"model":"other"}', 400]] as const) {
+      expect((await worker.fetch(request('/api/jev/evaluate', { method: 'POST', headers, body: payload }), { ASSETS: assets })).status).toBe(status);
+    }
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+});

@@ -13,6 +13,8 @@ export interface IndicatorArticle {
   title: string;
   description: string;
   sourceName: string;
+  url?: string;
+  publishedAt?: string;
 }
 
 export { ENGLISH_FINANCE_SOURCES };
@@ -60,14 +62,18 @@ export const mergeIndicatorArticles = (
 
 const mapSearchResult = (r: ExaResult): IndicatorArticle => ({
   title: r.title,
-  description: (r.text || '').slice(0, 300),
+  description: (r.text || '').slice(0, 2400),
   sourceName: 'Web Search',
+  url: r.url,
+  publishedAt: r.publishedDate,
 });
 
 const mapRssArticle = (a: NewsArticle): IndicatorArticle => ({
   title: a.title,
   description: a.description,
   sourceName: a.sourceName,
+  url: a.link,
+  publishedAt: a.pubDate,
 });
 
 /**

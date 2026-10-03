@@ -1,3 +1,4 @@
+import JevSettings from './JevSettings';
 import React, { useState, useEffect, useRef } from 'react';
 import { useDialog } from '../hooks/useDialog';
 import { XIcon } from './icons/Icons';
@@ -399,6 +400,8 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
               ? '支持云端 API（OpenRouter、DeepSeek、MiniMax、Ollama）或运行在本机的 CLI 服务（9Router、Claude Code、Codex）。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
               : 'Use a cloud API (OpenRouter, DeepSeek, MiniMax, Ollama) or a CLI service running on your machine (9Router, Claude Code, Codex). Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
           </p>
+
+          <JevSettings />
 
           {/* Mode switch: Cloud API vs Local CLI */}
           <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50" role="tablist" aria-label={zh ? '连接模式' : 'Connection mode'}>

@@ -1,8 +1,9 @@
+import type { ScanMetadata, SignalEvidence } from '../services/jevIndicatorService';
 // Pure logic for the "market thermometer" (exit-pressure gauge).
 // Kept free of DOM/AI dependencies so it can be unit-tested in isolation.
 
 /** One institutional-behavior signal detected by the AI news scan. */
-export interface SentimentSignal {
+export interface SentimentSignal extends SignalEvidence {
   /** Signal key, e.g. 'targetPriceRaises', 'consensusBullish', 'goodNewsFatigue', 'institutionalRetreat', 'externalBlame' */
   key: string;
   /** 0-100: how strongly this signal is present in the scanned news window */
@@ -11,7 +12,7 @@ export interface SentimentSignal {
   evidence: string;
 }
 
-export interface SentimentScanResult {
+export interface SentimentScanResult extends ScanMetadata {
   /** 0-100: aggregate crowding/euphoria read from news (fast variable) */
   newsScore: number;
   signals: SentimentSignal[];

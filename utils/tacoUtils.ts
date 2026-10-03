@@ -1,3 +1,4 @@
+import type { ScanMetadata, SignalEvidence } from '../services/jevIndicatorService';
 // Pure logic for the "TACO monitor" (Trump Always Chickens Out cycle tracker).
 // Kept free of DOM/AI dependencies so it can be unit-tested in isolation.
 //
@@ -8,7 +9,7 @@
 //    risk of a credibility-restoring "no chicken-out" event.
 
 /** One TACO-cycle signal detected by the AI news scan. */
-export interface TacoSignal {
+export interface TacoSignal extends SignalEvidence {
   /** 'threatEscalation' | 'marketPanic' | 'walkback' | 'complacency' | 'tacoMentions' */
   key: string;
   /** 0-100: how strongly this signal is present in the scanned news window */
@@ -17,7 +18,7 @@ export interface TacoSignal {
   evidence: string;
 }
 
-export interface TacoScanResult {
+export interface TacoScanResult extends ScanMetadata {
   signals: TacoSignal[];
   /** ISO timestamp of the scan */
   scannedAt: string;
