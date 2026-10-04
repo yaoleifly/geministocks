@@ -115,6 +115,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [model, setModel] = useState('');
+  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [mode, setMode] = useState<'cloud' | 'local'>('cloud');
   const [isCustomProvider, setIsCustomProvider] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -182,17 +183,18 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
 
   // Auto-scan local services when switching to (or opening in) local mode
   useEffect(() => {
-    if (isOpen && mode === 'local' && !hasScanned && !scanning) {
+    if (isOpen && advancedOpen && mode === 'local' && !hasScanned && !scanning) {
       // Auto-select the detected service unless we're restoring a saved local config
       const saved = getApiConfig();
       const savedIsLocal = !!saved && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)[:/]/.test(saved.baseUrl);
       runLocalScan(!savedIsLocal);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, mode, hasScanned]);
+  }, [isOpen, advancedOpen, mode, hasScanned]);
 
   useEffect(() => {
     if (isOpen) {
+      setAdvancedOpen(false);
       const config = getApiConfig();
       if (config) {
         setBaseUrl(config.baseUrl);
@@ -340,6 +342,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
         const importedBase: string = parsed.baseUrl;
         const importedIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)[:/]/.test(importedBase);
         setMode(importedIsLocal ? 'local' : 'cloud');
+        setAdvancedOpen(importedIsLocal);
         setBaseUrl(importedBase);
         setApiKey(typeof parsed.apiKey === 'string' ? parsed.apiKey : '');
         setModel(parsed.model);
@@ -397,12 +400,14 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
           {saveError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
           <p className="text-sm text-gray-500 leading-relaxed">
             {zh
-              ? '支持云端 API（OpenRouter、DeepSeek、MiniMax、Ollama）或运行在本机的 CLI 服务（9Router、Claude Code、Codex）。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
-              : 'Use a cloud API (OpenRouter, DeepSeek, MiniMax, Ollama) or a CLI service running on your machine (9Router, Claude Code, Codex). Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
+              ? '选择分析模型并填写 API 配置。本机服务可在高级设置中配置。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
+              : 'Choose an analysis model and enter its API settings. Local services are available in advanced settings. Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
           </p>
 
-          <JevSettings />
-
+          <h3 className="text-sm font-semibold text-gray-900">{zh ? '分析模型' : 'Analysis model'}</h3>
+          <details open={advancedOpen} onToggle={e => setAdvancedOpen(e.currentTarget.open)} className="rounded-lg border border-gray-200 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-gray-600">{zh ? '高级设置' : 'Advanced settings'}{mode === 'local' && <span className="ml-2 text-xs text-gray-500">{zh ? '当前使用本机配置' : 'Local configuration active'}</span>}</summary>
+            <p className="my-3 text-xs text-gray-500">{zh ? '本机 CLI 适用于在当前电脑运行的 Ollama 或模型代理。折叠此处不会改变已保存的配置。' : 'Local CLI connects to Ollama or a model proxy on this computer. Collapsing this section keeps your saved configuration.'}</p>
           {/* Mode switch: Cloud API vs Local CLI */}
           <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50" role="tablist" aria-label={zh ? '连接模式' : 'Connection mode'}>
             {([
@@ -434,6 +439,9 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
             ))}
           </div>
 
+          </details>
+
+          <div className="space-y-5" hidden={mode === 'local' && !advancedOpen}>
           {/* Local mode: scan status bar */}
           {mode === 'local' && (
             <div className="flex items-center justify-between -mb-2">
@@ -594,7 +602,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
           {mode === 'local' && isCustomProvider && (
             <p className="text-xs text-gray-400 -mt-2">
               {zh
-                ? '填���本机任意 OpenAI 兼容服务的地址，如 http://localhost:8000/v1。注意本地服务需允许浏览器跨域访问（CORS）。'
+                ? '填写本机任意 OpenAI 兼容服务的地址，如 http://localhost:8000/v1。注意本地服务需允许浏览器跨域访问（CORS）。'
                 : 'Enter any OpenAI-compatible endpoint on your machine, e.g. http://localhost:8000/v1. The local server must allow browser CORS access.'}
             </p>
           )}
@@ -784,6 +792,10 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
                 : 'Models with JSON output support are recommended for best results.'}
             </p>
           </div>
+
+          </div>
+
+          <JevSettings />
 
           {/* Real-time search (Exa / AnySearch) */}
           <div className="space-y-2.5 pt-4 border-t border-gray-100">
