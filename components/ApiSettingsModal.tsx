@@ -20,6 +20,7 @@ interface ApiSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved?: () => void;
+  startAfterSave?: boolean;
 }
 
 interface CloudPreset {
@@ -106,7 +107,7 @@ const LOCAL_PRESETS: LocalPreset[] = [
   },
 ];
 
-const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, onSaved }) => {
+const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, onSaved, startAfterSave = false }) => {
   const { locale } = useI18n();
   const zh = locale === 'zh';
   const dialogRef = useDialog(isOpen, onClose);
@@ -400,46 +401,12 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
           {saveError && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{saveError}</p>}
           <p className="text-sm text-gray-500 leading-relaxed">
             {zh
-              ? '选择分析模型并填写 API 配置。本机服务可在高级设置中配置。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
-              : 'Choose an analysis model and enter its API settings. Local services are available in advanced settings. Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
+              ? '完成基础配置即可分析；联网搜索和快速信号可稍后设置。配置保存在此浏览器。分析请求会发送给所选服务商，必要时经本站代理转发。'
+              : 'Complete the basic setup to start. Search and quick signals are optional. Your config is saved in this browser. Analysis requests go to your chosen provider, through this site’s proxy when needed.'}
           </p>
 
-          <h3 className="text-sm font-semibold text-gray-900">{zh ? '分析模型' : 'Analysis model'}</h3>
-          <details open={advancedOpen} onToggle={e => setAdvancedOpen(e.currentTarget.open)} className="rounded-lg border border-gray-200 p-3">
-            <summary className="cursor-pointer text-sm font-medium text-gray-600">{zh ? '高级设置' : 'Advanced settings'}{mode === 'local' && <span className="ml-2 text-xs text-gray-500">{zh ? '当前使用本机配置' : 'Local configuration active'}</span>}</summary>
-            <p className="my-3 text-xs text-gray-500">{zh ? '本机 CLI 适用于在当前电脑运行的 Ollama 或模型代理。折叠此处不会改变已保存的配置。' : 'Local CLI connects to Ollama or a model proxy on this computer. Collapsing this section keeps your saved configuration.'}</p>
-          {/* Mode switch: Cloud API vs Local CLI */}
-          <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50" role="tablist" aria-label={zh ? '连接模式' : 'Connection mode'}>
-            {([
-              { value: 'cloud' as const, labelZh: '云端 API', labelEn: 'Cloud API' },
-              { value: 'local' as const, labelZh: '本机 CLI', labelEn: 'Local CLI' },
-            ]).map((m) => (
-              <button
-                key={m.value}
-                role="tab"
-                aria-selected={mode === m.value}
-                onClick={() => {
-                  if (mode === m.value) return;
-                  setMode(m.value);
-                  setIsCustomProvider(false);
-                  setBaseUrl(m.value === 'local' ? LOCAL_PRESETS[0].baseUrl : '');
-                  setTestResult(null);
-                  setModelList([]);
-                  setShowModelPicker(false);
-                  setModelListError(null);
-                }}
-                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  mode === m.value
-                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
-                    : 'text-gray-500 hover:text-gray-800'
-                }`}
-              >
-                {zh ? m.labelZh : m.labelEn}
-              </button>
-            ))}
-          </div>
+          <h3 className="text-sm font-semibold text-gray-900">{zh ? '基础配置 · 服务商、密钥与模型' : 'Basic setup · Provider, key and model'}</h3>
 
-          </details>
 
           <div className="space-y-5" hidden={mode === 'local' && !advancedOpen}>
           {/* Local mode: scan status bar */}
@@ -637,8 +604,10 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
             </p>
           )}
 
-          {/* Base URL */}
-          <div className="space-y-1.5">
+          {/* Presets supply the address; editing remains available for custom endpoints. */}
+          <details key={`${mode}-${isCustomProvider}`} open={isCustomProvider || mode === 'local'} className="rounded-lg border border-stone-200 p-3">
+            <summary className="cursor-pointer text-sm text-stone-600">{isCustomProvider || mode === 'local' ? (zh ? '自定义连接地址' : 'Custom endpoint') : (zh ? '连接地址 · 已随服务商填入' : 'Endpoint · Filled by provider')}</summary>
+          <div className="mt-3 space-y-1.5">
             <label htmlFor="api-base-url" className="block text-sm font-medium text-gray-700">
               {zh ? '调用地址 (Base URL)' : 'Base URL'}
             </label>
@@ -662,6 +631,8 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
           </div>
+
+          </details>
 
           {/* API Key (optional in local mode) */}
           <div className="space-y-1.5">
@@ -795,8 +766,13 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
 
           </div>
 
-          <JevSettings />
+          <details className="rounded-xl border border-stone-200 p-4">
+            <summary className="cursor-pointer text-sm font-semibold">{zh ? '快速信号 · Jev（可选）' : 'Quick signals · Jev (optional)'}</summary>
+            <div className="mt-4"><JevSettings /></div>
+          </details>
 
+          <details className="rounded-xl border border-stone-200 p-4">
+            <summary className="cursor-pointer text-sm font-semibold">{zh ? '联网增强 · 搜索最新资料（可选）' : 'Web search · Latest sources (optional)'}</summary>
           {/* Real-time search (Exa / AnySearch) */}
           <div className="space-y-2.5 pt-4 border-t border-gray-100">
             <div className="flex items-center justify-between gap-3">
@@ -949,6 +925,42 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
             </div>
           </div>
 
+          </details>
+          <details open={advancedOpen} onToggle={e => setAdvancedOpen(e.currentTarget.open)} className="rounded-lg border border-gray-200 p-3">
+            <summary className="cursor-pointer text-sm font-medium text-gray-600">{zh ? '高级设置' : 'Advanced settings'}{mode === 'local' && <span className="ml-2 text-xs text-gray-500">{zh ? '当前使用本机配置' : 'Local configuration active'}</span>}</summary>
+            <p className="my-3 text-xs text-gray-500">{zh ? '本机 CLI 适用于在当前电脑运行的 Ollama 或模型代理。折叠此处不会改变已保存的配置。' : 'Local CLI connects to Ollama or a model proxy on this computer. Collapsing this section keeps your saved configuration.'}</p>
+          {/* Mode switch: Cloud API vs Local CLI */}
+          <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50" role="tablist" aria-label={zh ? '连接模式' : 'Connection mode'}>
+            {([
+              { value: 'cloud' as const, labelZh: '云端 API', labelEn: 'Cloud API' },
+              { value: 'local' as const, labelZh: '本机 CLI', labelEn: 'Local CLI' },
+            ]).map((m) => (
+              <button
+                key={m.value}
+                role="tab"
+                aria-selected={mode === m.value}
+                onClick={() => {
+                  if (mode === m.value) return;
+                  setMode(m.value);
+                  setIsCustomProvider(false);
+                  setBaseUrl(m.value === 'local' ? LOCAL_PRESETS[0].baseUrl : '');
+                  setTestResult(null);
+                  setModelList([]);
+                  setShowModelPicker(false);
+                  setModelListError(null);
+                }}
+                className={`flex-1 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  mode === m.value
+                    ? 'bg-white text-gray-900 shadow-sm border border-gray-200'
+                    : 'text-gray-500 hover:text-gray-800'
+                }`}
+              >
+                {zh ? m.labelZh : m.labelEn}
+              </button>
+            ))}
+          </div>
+
+          </details>
           {/* Test result */}
           {testResult && (
             <div
@@ -1028,7 +1040,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
                 disabled={!isValid}
                 className="px-5 py-2 text-sm font-semibold text-white bg-gray-900 rounded-lg hover:bg-black transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {zh ? '保存' : 'Save'}
+                {startAfterSave ? (zh ? '保存并开始分析' : 'Save and analyze') : (zh ? '保存' : 'Save')}
               </button>
             </div>
           </div>
