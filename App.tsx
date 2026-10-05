@@ -10,6 +10,8 @@ import {
 import type { AnalysisReport, TopicHistoryEntry } from './types';
 import AnalysisInput from './components/AnalysisInput';
 import ExampleResearch from './components/ExampleResearch';
+import WorkspaceNav from './components/WorkspaceNav';
+import { ResearchIcon } from './components/icons/ResearchIcons';
 import AnalysisProgress from './components/AnalysisProgress';
 import { readStored, writeStored } from './utils/browserStorage';
 import AnalysisHistory from './components/AnalysisHistory';
@@ -278,9 +280,21 @@ const MainPage: React.FC = () => {
     setDeletedHistory(null);
   };
 
-  const showLatestNews = locale === 'zh';
 
   const isLoadingAny = isLoading;
+
+  const openNews = () => {
+    if (isLoadingAny) return;
+    handleClearAllResults();
+    requestAnimationFrame(() => document.getElementById('workspace-news')?.scrollIntoView({ block: 'start' }));
+  };
+  const openHistory = () => {
+    const history = document.getElementById('research-history');
+    history?.scrollIntoView({ block: 'start' });
+    history?.focus();
+    history?.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')?.click();
+  };
+
 
   return (
     <>
@@ -323,39 +337,47 @@ const MainPage: React.FC = () => {
             />
           </Suspense>
       )}
-      <div className="min-h-screen relative z-10">
+      <div className="min-h-screen relative z-10 research-app">
+        <WorkspaceNav busy={isLoadingAny} onSettings={() => setIsApiSettingsOpen(true)} onNews={openNews} onHistory={openHistory} />
         <AppHeader
+          busy={isLoadingAny}
+          onNews={openNews}
+          onHistory={openHistory}
           apiConfigured={apiConfigured}
           onOpenUserGuide={() => setIsUserGuideModalOpen(true)}
           onOpenApiSettings={() => setIsApiSettingsOpen(true)}
         />
 
-        <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
+        <div className="workspace-main">
           <main id="main-content">
             <a href="#news-input" onClick={event => { event.preventDefault(); document.getElementById('news-input')?.focus(); }} className="sr-only focus:not-sr-only focus:block focus:mb-4">{locale === 'zh' ? '跳到分析输入' : 'Skip to analysis input'}</a>
-            <section className="mb-6 py-3 sm:py-5" aria-label={locale === 'zh' ? '开始研究' : 'Start researching'}>
+            <section className="workspace-intro mb-6 py-3 sm:py-5" aria-label={locale === 'zh' ? '开始研究' : 'Start researching'}>
               <p className="text-xs font-semibold tracking-widest text-amber-800">{locale === 'zh' ? '从信息，到有依据的判断' : 'FROM INFORMATION TO INFORMED JUDGMENT'}</p>
-              <h2 className="mt-3 max-w-3xl text-3xl sm:text-4xl font-semibold leading-tight text-stone-950 text-balance">{locale === 'zh' ? '一条新闻，找到值得研究的下一步。' : 'Turn a news story into your next research question.'}</h2>
-              <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{locale === 'zh' ? '梳理相关公司、影响路径与待验证的问题。先看一份示例，再研究你关心的事。' : 'Explore related companies, impact paths and open questions. Start with an example, then research what matters to you.'}</p>
+              <h2 className="mt-3 max-w-3xl text-3xl sm:text-4xl font-semibold leading-tight text-stone-950 text-balance">{locale === 'zh' ? '从一条线索，开始深入研究。' : 'Turn a news story into your next research question.'}</h2>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{locale === 'zh' ? '梳理影响路径，核对证据，找到下一步。' : 'Explore related companies, impact paths and open questions. Start with an example, then research what matters to you.'}</p>
               <button disabled={isLoading} onClick={() => { setError(null); setShowExample(true); requestAnimationFrame(() => document.getElementById('example-research')?.scrollIntoView({ block: 'start' })); }} className="mt-3 min-h-11 text-sm font-semibold text-amber-800 underline underline-offset-4 disabled:opacity-50">{locale === 'zh' ? '查看示例报告 · 无需配置' : 'View example report · No setup needed'}</button>
             </section>
             {showExample && <div id="example-research" className="mb-6 scroll-mt-6"><ExampleResearch onClose={() => setShowExample(false)} onUseTopic={() => { setShowExample(false); setUserInput(locale === 'zh' ? 'AI 数据中心扩建，会影响哪些产业链？有哪些证据需要验证？' : 'How does AI data center expansion affect suppliers, and what evidence should I verify?'); document.getElementById('news-input')?.focus(); }} /></div>}
 
-            <div className="space-y-8">
+            <div className={`workspace-grid ${!isLoadingAny && !error && !analysisReport ? 'workspace-grid-idle' : ''}`}>
                 {/* --- INPUT --- */}
-                <div className="space-y-8 animate-fade-in">
+                <div id="workspace-news" className="workspace-news space-y-6 scroll-mt-24">
                     <AnalysisInput
                       userInput={userInput}
                       setUserInput={setUserInput}
-                      onAnalyze={() => handleAnalyze(userInput)}
+                      onAnalyze={(topic) => handleAnalyze(topic ?? userInput)}
                       isLoading={isLoading}
                       apiConfigured={apiConfigured}
                       draftSaved={draftSaved}
                       onConfigure={() => setIsApiSettingsOpen(true)}
                     />
                 </div>
+                {!isLoadingAny && !analysisReport && !showExample && <button className="research-example-teaser" onClick={() => { setShowExample(true); requestAnimationFrame(() => document.getElementById('example-research')?.scrollIntoView({ block: 'start' })); }}>
+                  <ResearchIcon name="evidence" className="w-8 h-8"/><span><small>{locale === 'zh' ? '示例研究 · 非实时' : 'Example · Not live'}</small><strong>{locale === 'zh' ? 'AI 数据中心扩建，该关注什么？' : 'What matters in an AI data center expansion?'}</strong><span>{locale === 'zh' ? '事件 → 影响路径 → 待验证' : 'Event → Impact → Verification'}</span></span><ResearchIcon name="arrow" className="w-5 h-5 ml-auto"/>
+                </button>}
 
-                {!isLoading && <>
+                {!isLoading && <div id="research-history" tabIndex={-1} className="workspace-history scroll-mt-24 outline-none">
+                  {!topicHistory.length && <p className="history-empty"><ResearchIcon name="history" className="w-5 h-5" />{locale === 'zh' ? '研究记录会保存在此浏览器，方便随时回看。' : 'Research history is saved in this browser for later review.'}</p>}
                   {deletedHistory && <div role="status" className="flex items-center justify-between gap-3 rounded-xl border border-stone-200 bg-stone-50 p-4 text-sm">
                     <span>{locale === 'zh' ? '历史记录已删除' : 'History removed'}</span>
                     <button className="min-h-11 px-3 font-semibold underline" onClick={handleUndoHistory}>{locale === 'zh' ? '撤销删除' : 'Undo deletion'}</button>
@@ -372,10 +394,10 @@ const MainPage: React.FC = () => {
                         onClear={handleClearTopicHistory}
                         onReanalyze={handleReanalyzeTopicHistory}
                       />
-                </>}
+                </div>}
 
                 {/* --- RESULTS / DASHBOARD --- */}
-                <div ref={statusRef} tabIndex={-1} role="region" aria-label={locale === 'zh' ? '分析结果与状态' : 'Analysis results and status'} className="outline-none scroll-mt-6">
+                <div ref={statusRef} tabIndex={-1} role="region" aria-label={locale === 'zh' ? '分析结果与状态' : 'Analysis results and status'} className="workspace-results outline-none scroll-mt-24">
                 {isLoadingAny ? (
                   <AnalysisProgress completed={topicProgress} onCancel={handleCancel} prediction={/^https?:\/\/polymarket\.com\//.test(failedTopic)} />
                 ) : error ? (
@@ -399,12 +421,12 @@ const MainPage: React.FC = () => {
                     </Suspense>
                 ) : (
                   // Offer readable news before the deeper market indicators.
-                  <div className="space-y-8 animate-fade-in">
+                  <div id="workspace-news" className="workspace-news space-y-6 scroll-mt-24">
                     <div className="grid grid-cols-1 gap-8 items-start">
-                      {showLatestNews && <LatestNews
+                      <LatestNews
                         onAnalyze={handleNewsSelect}
                         sources={NEWS_SOURCES}
-                      />}
+                      />
                     </div>
                     <details className="rounded-2xl border border-stone-200 bg-stone-50 p-5"><summary className="cursor-pointer font-semibold text-stone-700">{locale === 'zh' ? '市场环境 · 情绪与政策监测' : 'Market context · Sentiment and policy'}</summary><p className="my-3 text-sm text-stone-600">{locale === 'zh' ? '按需扫描，辅助理解市场背景。' : 'Scan on demand for market context.'}</p><div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                       <MarketThermometer sources={NEWS_SOURCES} />

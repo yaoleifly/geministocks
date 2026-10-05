@@ -1,3 +1,4 @@
+import { ResearchIcon } from './icons/ResearchIcons';
 import JevNewsSignals from './JevNewsSignals';
 import { sanitizeNewsHtml } from '../utils/newsHtml';
 import { useDialog } from '../hooks/useDialog';
@@ -371,12 +372,12 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
   return (
     <>
       <NewsDetailModal article={selectedArticle} onClose={() => setSelectedArticle(null)} onAnalyze={onAnalyze} />
-      <div className="bg-white border border-stone-200/90 rounded-2xl p-4 sm:p-6 shadow-sm h-full">
+      <div className="news-editorial h-full">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-black rounded-xl shadow-lg">
-            <NewspaperIcon className="w-5 h-5 text-white" />
+          <div className="text-stone-900">
+            <ResearchIcon name="radar" className="w-7 h-7" />
           </div>
-          <h3 className="text-xl font-semibold text-black">{t('latestNews.title')}</h3>
+          <h3 className="text-xl font-semibold text-black">{locale === 'zh' ? '热点线索' : 'News signals'}</h3>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-b border-gray-200 pb-4 mb-4">
@@ -405,8 +406,8 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
                 onClick={() => setActiveSourceId(source.id)}
                 className={`px-4 py-1.5 text-sm font-medium rounded-full transition-all duration-200 cursor-grab active:cursor-grabbing focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-black ${
                   activeSourceId === source.id
-                    ? 'bg-black text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    ? 'bg-[#F3E7DF] text-[#9B4828]'
+                    : 'bg-transparent text-stone-600 hover:bg-stone-100'
                 } ${source.custom ? 'pr-7' : ''}`}
                 title={t('latestNews.dragToReorder')}
               >
@@ -509,7 +510,7 @@ const LatestNews: React.FC<LatestNewsProps> = ({ onAnalyze, sources }) => {
               />
               <button
                 onClick={handleAddSource}
-                className="px-4 py-1.5 text-sm font-medium rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
+                className="px-3 py-2 text-sm font-medium rounded-lg bg-black text-white hover:bg-gray-800 transition-colors"
               >
                 {t('latestNews.addCustomSource')}
               </button>

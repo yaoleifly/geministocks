@@ -121,3 +121,16 @@ it('cancelling setup preserves the draft and never starts analysis', async () =>
   fireEvent.click(screen.getByRole('button', {name:'配置并开始'}));
   expect(await screen.findByRole('dialog')).toBeTruthy();
 });
+
+it('continues company research after setup while preserving the original draft', async () => {
+  mocks.configured = false;
+  mocks.analyze.mockResolvedValue(report);
+  render(<App />);
+  fireEvent.click(screen.getByRole('button', { name: '公司研究' }));
+  fireEvent.change(screen.getByRole('textbox'), { target: { value: 'NVDA' } });
+  fireEvent.click(screen.getByRole('button', { name: '配置并开始' }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Save model' }));
+  await screen.findByText(/Report: 研究以下公司/);
+  expect(mocks.analyze.mock.calls[0][0]).toContain('财务状况与风险');
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('NVDA');
+});
