@@ -9,6 +9,7 @@ import {
 } from './services/streamingService';
 import type { AnalysisReport, TopicHistoryEntry } from './types';
 import AnalysisInput from './components/AnalysisInput';
+import ExampleResearch from './components/ExampleResearch';
 import AnalysisProgress from './components/AnalysisProgress';
 import { readStored, writeStored } from './utils/browserStorage';
 import AnalysisHistory from './components/AnalysisHistory';
@@ -67,6 +68,8 @@ const MainPage: React.FC = () => {
 
   const activeRequest = useRef<AbortController | null>(null);
   const [reportTopic, setReportTopic] = useState('');
+  const [showExample, setShowExample] = useState(false);
+  const pendingAnalysis = useRef<{ topic: string; fresh: boolean } | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
   const [deletedHistory, setDeletedHistory] = useState<TopicHistoryEntry[] | null>(null);
   const [failedTopic, setFailedTopic] = useState('');
@@ -162,6 +165,7 @@ const MainPage: React.FC = () => {
   };
 
   const handleClearAllResults = () => {
+      setShowExample(false);
       setAnalysisReport(null);
       setError(null);
   }
@@ -170,7 +174,8 @@ const MainPage: React.FC = () => {
     if (activeRequest.current) return;
     topic = topic.trim();
     if (!topic.trim()) { setError(t('errors.emptyTopic')); return; }
-    if (!ensureApiConfigured()) return;
+    if (!ensureApiConfigured()) { pendingAnalysis.current = { topic, fresh }; return; }
+    setShowExample(false);
 
     const controller = new AbortController();
     activeRequest.current = controller;
@@ -288,10 +293,18 @@ const MainPage: React.FC = () => {
       {isApiSettingsOpen && (
         <Suspense fallback={null}>
           <ApiSettingsModal
+            startAfterSave={Boolean(pendingAnalysis.current)}
             isOpen={isApiSettingsOpen}
-            onClose={() => { setIsApiSettingsOpen(false); setApiConfigured(isApiConfigured()); }}
+            onClose={() => { pendingAnalysis.current = null; setIsApiSettingsOpen(false); setApiConfigured(isApiConfigured()); }}
             onSaved={() => {
               setApiConfigured(isApiConfigured());
+              const pending = pendingAnalysis.current;
+              pendingAnalysis.current = null;
+              if (pending) {
+                setIsApiSettingsOpen(false);
+                void handleAnalyze(pending.topic, pending.fresh);
+                return;
+              }
               setToast({
                 message: locale === 'zh' ? '模型已配置成功，现在可以开始分析了' : 'Model configured successfully. You can start analyzing now.',
                 type: 'success',
@@ -320,34 +333,13 @@ const MainPage: React.FC = () => {
         <div className="w-full max-w-6xl mx-auto p-4 sm:p-6 lg:p-8">
           <main id="main-content">
             <a href="#news-input" onClick={event => { event.preventDefault(); document.getElementById('news-input')?.focus(); }} className="sr-only focus:not-sr-only focus:block focus:mb-4">{locale === 'zh' ? '跳到分析输入' : 'Skip to analysis input'}</a>
-            {!apiConfigured && (
-              <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:p-5 animate-fade-in" role="region" aria-label={locale === 'zh' ? '配置引导' : 'Setup guide'}>
-                <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="hidden sm:flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-6 h-6">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.077-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 text-left">
-                    <h2 className="text-base font-semibold text-amber-900 text-balance">
-                      {locale === 'zh' ? '请先配置分析模型' : 'Configure a model to start'}
-                    </h2>
-                    <p className="mt-1 text-sm text-amber-800 leading-relaxed text-pretty">
-                      {locale === 'zh'
-                        ? '支持云端 API 或本机 CLI，配置仅保存在浏览器本地。'
-                        : 'Cloud API or local CLI. Config stays in your browser.'}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setIsApiSettingsOpen(true)}
-                    className="shrink-0 inline-flex items-center justify-center gap-x-1.5 rounded-full bg-amber-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 focus:ring-offset-amber-50"
-                  >
-                    {locale === 'zh' ? '立即配置' : 'Configure now'}
-                  </button>
-                </div>
-              </div>
-            )}
+            <section className="mb-6 py-3 sm:py-5" aria-label={locale === 'zh' ? '开始研究' : 'Start researching'}>
+              <p className="text-xs font-semibold tracking-widest text-amber-800">{locale === 'zh' ? '从信息，到有依据的判断' : 'FROM INFORMATION TO INFORMED JUDGMENT'}</p>
+              <h2 className="mt-3 max-w-3xl text-3xl sm:text-4xl font-semibold leading-tight text-stone-950 text-balance">{locale === 'zh' ? '一条新闻，找到值得研究的下一步。' : 'Turn a news story into your next research question.'}</h2>
+              <p className="mt-3 max-w-2xl text-base leading-7 text-stone-600">{locale === 'zh' ? '梳理相关公司、影响路径与待验证的问题。先看一份示例，再研究你关心的事。' : 'Explore related companies, impact paths and open questions. Start with an example, then research what matters to you.'}</p>
+              <button disabled={isLoading} onClick={() => { setError(null); setShowExample(true); requestAnimationFrame(() => document.getElementById('example-research')?.scrollIntoView({ block: 'start' })); }} className="mt-3 min-h-11 text-sm font-semibold text-amber-800 underline underline-offset-4 disabled:opacity-50">{locale === 'zh' ? '查看示例报告 · 无需配置' : 'View example report · No setup needed'}</button>
+            </section>
+            {showExample && <div id="example-research" className="mb-6 scroll-mt-6"><ExampleResearch onClose={() => setShowExample(false)} onUseTopic={() => { setShowExample(false); setUserInput(locale === 'zh' ? 'AI 数据中心扩建，会影响哪些产业链？有哪些证据需要验证？' : 'How does AI data center expansion affect suppliers, and what evidence should I verify?'); document.getElementById('news-input')?.focus(); }} /></div>}
 
             <div className="space-y-8">
                 {/* --- INPUT --- */}
@@ -359,6 +351,7 @@ const MainPage: React.FC = () => {
                       isLoading={isLoading}
                       apiConfigured={apiConfigured}
                       draftSaved={draftSaved}
+                      onConfigure={() => setIsApiSettingsOpen(true)}
                     />
                 </div>
 
@@ -413,10 +406,10 @@ const MainPage: React.FC = () => {
                         sources={NEWS_SOURCES}
                       />}
                     </div>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
+                    <details className="rounded-2xl border border-stone-200 bg-stone-50 p-5"><summary className="cursor-pointer font-semibold text-stone-700">{locale === 'zh' ? '市场环境 · 情绪与政策监测' : 'Market context · Sentiment and policy'}</summary><p className="my-3 text-sm text-stone-600">{locale === 'zh' ? '按需扫描，辅助理解市场背景。' : 'Scan on demand for market context.'}</p><div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                       <MarketThermometer sources={NEWS_SOURCES} />
                       <TacoMonitor sources={NEWS_SOURCES} />
-                    </div>
+                    </div></details>
 
 
                   </div>

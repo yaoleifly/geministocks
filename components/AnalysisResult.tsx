@@ -51,9 +51,9 @@ const SentimentIndicator: React.FC<{ sentiment: 'Positive' | 'Neutral' | 'Negati
         icon: '😟',
       },
     };
-  
+
     const config = sentimentConfig[sentiment] || sentimentConfig.Neutral;
-  
+
     return (
        <div className={`border border-gray-200 bg-white rounded-xl px-4 py-3 shadow-sm inline-flex items-center gap-3 font-medium transition-all duration-300`}>
             <div className={`w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center`}>
@@ -382,9 +382,9 @@ interface AnalysisResultProps {
 }
 
 
-const AnalysisResult: React.FC<AnalysisResultProps> = ({ 
-    report, 
-    userInput, 
+const AnalysisResult: React.FC<AnalysisResultProps> = ({
+    report,
+    userInput,
     onNewAnalysis
 }) => {
   const { t, locale } = useI18n();
@@ -405,14 +405,14 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
 
     const inputKeywords = userInput
       .toLowerCase()
-      .split(/[\s,.;:!?()"""—-]+/) 
+      .split(/[\s,.;:!?()"""—-]+/)
       .filter(word => word.length > 2);
 
     return [...new Set([...stockKeywords, ...inputKeywords])]
       .filter(Boolean)
       .sort((a, b) => b.length - a.length);
   }, [report, userInput]);
-  
+
   // Auto-dismiss the export success message
   useEffect(() => {
     if (!exportSuccess) return;
@@ -430,8 +430,8 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
 
     try {
       // Generate dynamic filename based on report content and current theme/context
-      const reportTitle = report.summary?.substring(0, 50) || 
-                         userInput?.substring(0, 50) || 
+      const reportTitle = report.summary?.substring(0, 50) ||
+                         userInput?.substring(0, 50) ||
                          'report';
       const filename = generateExportFilename('analysis', reportTitle, locale);
 
@@ -449,7 +449,7 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
       setIsExporting(false);
     }
   }, [report, userInput, locale, t, isExporting]);
-  
+
   const handleExportReport = useCallback(async () => {
     if (exportRef.current === null || isExportingReport) {
       return;
@@ -492,14 +492,14 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
       {report.dataFreshness && (
         <div className="no-print flex items-center justify-end gap-2 text-xs text-gray-500">
           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full ${
-            report.dataFreshness.isRealTimeEnabled 
-              ? 'bg-green-50 text-green-700' 
+            report.dataFreshness.isRealTimeEnabled
+              ? 'bg-green-50 text-green-700'
               : 'bg-gray-100 text-gray-600'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${
               report.dataFreshness.isRealTimeEnabled ? 'bg-green-500' : 'bg-gray-400'
             }`}></span>
-            {report.dataFreshness.isRealTimeEnabled 
+            {report.dataFreshness.isRealTimeEnabled
               ? (locale === 'zh' ? '实时数据' : 'Real-time Data')
               : (locale === 'zh' ? '缓存数据' : 'Cached Data')
             }
@@ -576,20 +576,9 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
             </span>
           </p>
         </div>
-        
+
         <div className="space-y-6">
             {report.polymarketData && <PolymarketInfoCard data={report.polymarketData} />}
-            <div className={`grid grid-cols-1 gap-6 ${report.informationGapScore ? 'lg:grid-cols-2' : ''}`}>
-                {report.investmentScore && <ScoreDisplay scoreData={report.investmentScore} />}
-                {report.informationGapScore && (
-                    <ScoreDisplay
-                        scoreData={report.informationGapScore}
-                        title={t('scoreDisplay.infoGapTitle')}
-                        accentColor="#1C1917"
-                    />
-                )}
-            </div>
-            
             {report.summary && (
               <div className="mb-6">
                   <h3 className="text-xl font-semibold text-black mb-3 pl-2">{t('analysisResult.summaryTitle')}</h3>
@@ -599,73 +588,10 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Simplified Sentiment Card */}
-                {report.analysis?.marketSentiment && (
-                    <Card title={t('analysisResult.sentimentTitle')} icon={<SparklesIcon className="w-5 h-5"/>}>
-                        <div className="flex items-center space-x-4 mb-2">
-                            <span className="font-semibold text-black">{t('analysisResult.sentimentLabel')}</span>
-                            <SentimentIndicator sentiment={report.analysis.marketSentiment.sentiment} />
-                        </div>
-                        <TextRenderer text={report.analysis.marketSentiment.description} keywords={keywords} />
-                    </Card>
-                )}
-
-                <Card title={t('analysisResult.industryChainTitle')} className="md:col-span-2" icon={<DiagramIcon className="w-5 h-5"/>}>
-                    {report.analysis?.industryChain ? (
-                        typeof report.analysis.industryChain === 'string' ? (
-                            <TextRenderer text={report.analysis.industryChain} keywords={keywords} />
-                        ) : (
-                            <IndustryChainViz chain={report.analysis.industryChain} />
-                        )
-                    ) : FallbackContent}
-                </Card>
-
-                {report.marketSizeAndOutlook && (
-                    <MarketSizeCard 
-                        narrative={report.marketSizeAndOutlook.narrative}
-                        tamSamSom={report.marketSizeAndOutlook.tamSamSom}
-                    />
-                )}
-                
-                {report.competitiveLandscape && <CompetitiveLandscapeCard landscape={report.competitiveLandscape} />}
-                {report.catalystTracker && <CatalystTrackerCard tracker={report.catalystTracker} />}
-                {report.policyAnalysis && <PolicyAnalysisCard analysis={report.policyAnalysis} />}
-                {report.techTrajectory && <TechTrajectoryCard trajectory={report.techTrajectory} />}
-
-                {report.scenarioAnalysis && <ScenarioAnalysisCard scenarios={report.scenarioAnalysis} />}
-
-                <Card title={t('analysisResult.strategyTitle')} className="md:col-span-2" icon={<StrategyIcon className="w-5 h-5"/>}>
-                    {report.investmentStrategy ? (
-                        <>
-                            <div>
-                                <h4 className="text-lg font-semibold text-black mb-2 flex items-center gap-2">
-                                    <LightBulbIcon className="w-5 h-5" />
-                                    {t('analysisResult.strategyLogic')}
-                                </h4>
-                                <div className="pl-4 border-l-2 border-gray-300 ml-2.5">
-                                    <TextRenderer text={report.investmentStrategy.logic} keywords={keywords} />
-                                </div>
-                            </div>
-                            <div className="mt-6">
-                                <h4 className="text-lg font-semibold text-black mb-2 flex items-center gap-2">
-                                    <CheckCircleIcon className="w-5 h-5" />
-                                    {t('analysisResult.strategySuggestion')}
-                                </h4>
-                                <div className="pl-4 border-l-2 border-gray-300 ml-2.5">
-                                    <TextRenderer text={report.investmentStrategy.suggestion} keywords={keywords} />
-                                </div>
-                            </div>
-                        </>
-                    ) : FallbackContent}
-                </Card>
-                
-                {report.investmentStrategy?.timeHorizons && <TimeHorizonStrategyCard horizons={report.investmentStrategy.timeHorizons} />}
-
-            </div>
-            
-            {report.tieredSuggestions && <TieredSuggestionsDisplay suggestions={report.tieredSuggestions} keywords={keywords} />}
-
+            <section aria-label={locale === 'zh' ? '证据与资料' : 'Evidence and sources'} className="space-y-4">
+              <h3 className="text-xl font-semibold">{locale === 'zh' ? '先核对依据，再看判断' : 'Check the evidence before the judgment'}</h3>
+              <p className="text-sm leading-6 text-stone-600">{locale === 'zh' ? '以下为本次报告的参考资料，不代表每项结论均已核实。模型推断仍需对照原文验证。' : 'These references inform the report; they do not independently verify every conclusion. Check model inferences against the originals.'}</p>
+              {!report.realTimeSources?.length && !report.sources?.length && <p className="rounded-lg bg-amber-50 p-4 text-sm text-amber-900">{locale === 'zh' ? '本报告未附可核对的外部来源。请补充原始材料或启用联网搜索后重新分析。' : 'No checkable external sources are attached. Add original material or enable web search and rerun the analysis.'}</p>}
             {report.realTimeSources && report.realTimeSources.length > 0 && (
                 <Card title={locale === 'zh' ? '实时搜索来源' : 'Real-time Search Sources'} icon={<GlobeIcon className="w-5 h-5"/>}>
                     <p className="text-xs text-gray-500 -mt-2 mb-3">
@@ -737,7 +663,90 @@ const AnalysisResult: React.FC<AnalysisResultProps> = ({
                         ))}
                     </ul>
                 </Card>
-            )}
+            )}            </section>
+            <section className="rounded-xl border border-stone-200 p-4">
+              <h3 className="font-semibold">{locale === 'zh' ? '辅助评分与理由' : 'Supporting scores and reasoning'}</h3>
+              <p className="my-3 text-sm text-stone-600">{locale === 'zh' ? '评分用于组织研究优先级，不是收益预测；请结合证据完整度阅读。' : 'Scores help organize research priorities. They are not return forecasts; consider the evidence available.'}</p>
+            <div className={`grid grid-cols-1 gap-6 ${report.informationGapScore ? 'lg:grid-cols-2' : ''}`}>
+                {report.investmentScore && <ScoreDisplay scoreData={report.investmentScore} />}
+                {report.informationGapScore && (
+                    <ScoreDisplay
+                        scoreData={report.informationGapScore}
+                        title={t('scoreDisplay.infoGapTitle')}
+                        accentColor="#1C1917"
+                    />
+                )}
+            </div>
+
+            </section>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Simplified Sentiment Card */}
+                {report.analysis?.marketSentiment && (
+                    <Card title={t('analysisResult.sentimentTitle')} icon={<SparklesIcon className="w-5 h-5"/>}>
+                        <div className="flex items-center space-x-4 mb-2">
+                            <span className="font-semibold text-black">{t('analysisResult.sentimentLabel')}</span>
+                            <SentimentIndicator sentiment={report.analysis.marketSentiment.sentiment} />
+                        </div>
+                        <TextRenderer text={report.analysis.marketSentiment.description} keywords={keywords} />
+                    </Card>
+                )}
+
+                <Card title={t('analysisResult.industryChainTitle')} className="md:col-span-2" icon={<DiagramIcon className="w-5 h-5"/>}>
+                    {report.analysis?.industryChain ? (
+                        typeof report.analysis.industryChain === 'string' ? (
+                            <TextRenderer text={report.analysis.industryChain} keywords={keywords} />
+                        ) : (
+                            <IndustryChainViz chain={report.analysis.industryChain} />
+                        )
+                    ) : FallbackContent}
+                </Card>
+
+                {report.marketSizeAndOutlook && (
+                    <MarketSizeCard
+                        narrative={report.marketSizeAndOutlook.narrative}
+                        tamSamSom={report.marketSizeAndOutlook.tamSamSom}
+                    />
+                )}
+
+                {report.competitiveLandscape && <CompetitiveLandscapeCard landscape={report.competitiveLandscape} />}
+                {report.catalystTracker && <CatalystTrackerCard tracker={report.catalystTracker} />}
+                {report.policyAnalysis && <PolicyAnalysisCard analysis={report.policyAnalysis} />}
+                {report.techTrajectory && <TechTrajectoryCard trajectory={report.techTrajectory} />}
+
+                {report.scenarioAnalysis && <ScenarioAnalysisCard scenarios={report.scenarioAnalysis} />}
+
+                <Card title={t('analysisResult.strategyTitle')} className="md:col-span-2" icon={<StrategyIcon className="w-5 h-5"/>}>
+                    {report.investmentStrategy ? (
+                        <>
+                            <div>
+                                <h4 className="text-lg font-semibold text-black mb-2 flex items-center gap-2">
+                                    <LightBulbIcon className="w-5 h-5" />
+                                    {t('analysisResult.strategyLogic')}
+                                </h4>
+                                <div className="pl-4 border-l-2 border-gray-300 ml-2.5">
+                                    <TextRenderer text={report.investmentStrategy.logic} keywords={keywords} />
+                                </div>
+                            </div>
+                            <div className="mt-6">
+                                <h4 className="text-lg font-semibold text-black mb-2 flex items-center gap-2">
+                                    <CheckCircleIcon className="w-5 h-5" />
+                                    {t('analysisResult.strategySuggestion')}
+                                </h4>
+                                <div className="pl-4 border-l-2 border-gray-300 ml-2.5">
+                                    <TextRenderer text={report.investmentStrategy.suggestion} keywords={keywords} />
+                                </div>
+                            </div>
+                        </>
+                    ) : FallbackContent}
+                </Card>
+
+                {report.investmentStrategy?.timeHorizons && <TimeHorizonStrategyCard horizons={report.investmentStrategy.timeHorizons} />}
+
+            </div>
+
+            {report.tieredSuggestions && <TieredSuggestionsDisplay suggestions={report.tieredSuggestions} keywords={keywords} />}
+
+
         </div>
         <footer className="text-center mt-8 pt-4 border-t border-gray-200">
           <p className="text-xs text-gray-500">
