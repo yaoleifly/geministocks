@@ -18,7 +18,7 @@ import App from './App';
 
 const report = { investmentScore: { score: 80 } };
 const start = () => { fireEvent.change(screen.getByRole('textbox'), { target: { value: 'AI topic' } }); fireEvent.click(screen.getByRole('button', { name: /analysisInput.button/ })); };
-beforeEach(() => { localStorage.clear(); mocks.configured = true; mocks.analyze.mockReset(); window.scrollTo = vi.fn(); });
+beforeEach(() => { window.location.hash = ''; localStorage.clear(); mocks.configured = true; mocks.analyze.mockReset(); window.scrollTo = vi.fn(); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 describe('research user journey', () => {
@@ -133,4 +133,48 @@ it('continues company research after setup while preserving the original draft',
   await screen.findByText(/Report: 研究以下公司/);
   expect(mocks.analyze.mock.calls[0][0]).toContain('财务状况与风险');
   expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('NVDA');
+});
+
+it('requires explicit draft import and never automatically analyzes a stock handoff', async () => {
+  const context = {ticker:'NVDA',company:'英伟达',theme:'算力',question:'核对订单',preview:true};
+  window.location.hash = '/?stock=' + encodeURIComponent(JSON.stringify(context));
+  localStorage.setItem('gemini-analysis-draft', JSON.stringify('Original draft'));
+  render(<App />);
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('Original draft');
+  expect(mocks.analyze).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', {name:'载入研究草稿'}));
+  expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toContain('核对订单');
+  expect(mocks.analyze).not.toHaveBeenCalled();
+  window.location.hash = '';
+});
+
+
+it('stores stock context and reopens the saved report from its return link without another model call', async () => {
+  const context = {ticker:'NVDA',company:'英伟达',theme:'算力',question:'核对订单',preview:true};
+  window.location.hash = '/?stock=' + encodeURIComponent(JSON.stringify(context));
+  mocks.analyze.mockResolvedValue(report);
+  const view = render(<App />);
+  fireEvent.click(screen.getByRole('button', {name:'载入研究草稿'}));
+  fireEvent.click(screen.getByRole('button', {name:/analysisInput.button/}));
+  const link = await screen.findByRole('link', {name:'关联报告并返回股票池 ↗'});
+  const returned = new URL(link.getAttribute('href')!);
+  expect(returned.origin).toBe('https://stocks-design-preview.mastergo.workers.dev');
+  const metadata = JSON.parse(decodeURIComponent(returned.hash.slice(10)));
+  expect(metadata.ticker).toBe('NVDA');
+  const saved = JSON.parse(localStorage.getItem('gemini-analysis-history')!)[0];
+  expect(saved.stockContext).toEqual(context);
+  expect(metadata.reportId).toBe(saved.id);
+  view.unmount();
+  window.location.hash = '/?report=' + saved.id;
+  render(<App />);
+  await screen.findByText(/Report: 研究 英伟达/);
+  expect(mocks.analyze).toHaveBeenCalledTimes(1);
+});
+
+it('handles a missing report and corrupted saved history safely', () => {
+  localStorage.setItem('gemini-analysis-history', JSON.stringify([null]));
+  window.location.hash = '/?report=123';
+  render(<App />);
+  expect(screen.getByText(/此浏览器找不到该报告/)).toBeTruthy();
+  expect(mocks.analyze).not.toHaveBeenCalled();
 });
