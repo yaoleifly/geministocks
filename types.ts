@@ -170,6 +170,7 @@ export interface AnalysisReport {
 
 
 export interface TopicHistoryEntry {
+  stockContext?: import('./utils/stockHandoff').StockContext;
   id: number;
   topic: string;
   report: AnalysisReport;

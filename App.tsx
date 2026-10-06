@@ -1,3 +1,4 @@
+import { parseStockContext, stockDraft, stockReturnUrl, type StockContext } from './utils/stockHandoff';
 
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
 import { HashRouter, Routes, Route } from 'react-router-dom';
@@ -71,7 +72,11 @@ const MainPage: React.FC = () => {
   const activeRequest = useRef<AbortController | null>(null);
   const [reportTopic, setReportTopic] = useState('');
   const [showExample, setShowExample] = useState(false);
-  const pendingAnalysis = useRef<{ topic: string; fresh: boolean } | null>(null);
+  const [incomingStock, setIncomingStock] = useState(() => parseStockContext(new URLSearchParams(window.location.hash.split('?')[1] || '').get('stock')));
+  const [stockContext, setStockContext] = useState<StockContext | null>(null);
+  const [linkedReport, setLinkedReport] = useState<{ context: StockContext; id: number } | null>(null);
+  const [reportLinkMissing, setReportLinkMissing] = useState(false);
+  const pendingAnalysis = useRef<{ topic: string; fresh: boolean; context: StockContext | null } | null>(null);
   const [draftSaved, setDraftSaved] = useState(false);
   const [deletedHistory, setDeletedHistory] = useState<TopicHistoryEntry[] | null>(null);
   const [failedTopic, setFailedTopic] = useState('');
@@ -110,15 +115,28 @@ const MainPage: React.FC = () => {
   }, [toast]);
 
   useEffect(() => {
+    const section = new URLSearchParams(window.location.hash.split('?')[1] || '').get('section');
+    if (section === 'settings') setIsApiSettingsOpen(true);
+    if (section === 'history') requestAnimationFrame(() => openHistory());
     // Initialize user ID (for anonymous users)
     getUserId();
 
     // Check whether the user has configured their API settings
     setApiConfigured(isApiConfigured());
 
-    setTopicHistory(readStored<TopicHistoryEntry[]>(TOPIC_HISTORY_STORAGE_KEY, [],
+    const storedHistory = readStored<TopicHistoryEntry[]>(TOPIC_HISTORY_STORAGE_KEY, [],
       (value): value is TopicHistoryEntry[] => Array.isArray(value) && value.every(entry =>
-        entry && typeof entry.id === 'number' && typeof entry.topic === 'string' && entry.report && typeof entry.report === 'object')));
+        entry && Number.isSafeInteger(entry.id) && entry.id > 0 && typeof entry.topic === 'string' && entry.report && typeof entry.report === 'object'));
+    setTopicHistory(storedHistory);
+    const reportId = Number(new URLSearchParams(window.location.hash.split('?')[1] || '').get('report'));
+    if (Number.isSafeInteger(reportId) && reportId > 0) {
+      const entry = storedHistory.find(item => item.id === reportId);
+      if (entry) {
+        setAnalysisReport(entry.report); setReportTopic(entry.topic);
+        const context = parseStockContext(JSON.stringify(entry.stockContext));
+        if (context) setLinkedReport({ context, id: entry.id });
+      } else setReportLinkMissing(true);
+    }
     setUserAnalysisCount(readStored(USER_ANALYSIS_COUNT_KEY, 0,
       (value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0));
 
@@ -153,9 +171,11 @@ const MainPage: React.FC = () => {
 
   const updateTopicHistory = (newHistory: TopicHistoryEntry[]) => {
     setTopicHistory(newHistory);
-    if (!writeStored(TOPIC_HISTORY_STORAGE_KEY, newHistory)) {
+    const stored = writeStored(TOPIC_HISTORY_STORAGE_KEY, newHistory);
+    if (!stored) {
       setToast({ message: locale === 'zh' ? '浏览器存储已满或不可用。报告仍可查看，请及时导出。' : 'Browser storage is full or unavailable. Your report is still available; export it to keep a copy.', type: 'info' });
     }
+    return stored;
   };
 
   const incrementUserAnalysisCount = () => {
@@ -172,11 +192,12 @@ const MainPage: React.FC = () => {
       setError(null);
   }
 
-  const handleAnalyze = useCallback(async (topic: string, fresh = false) => {
+  const handleAnalyze = useCallback(async (topic: string, fresh = false, contextOverride?: StockContext | null) => {
+    const analysisContext = contextOverride === undefined ? stockContext : contextOverride;
     if (activeRequest.current) return;
     topic = topic.trim();
     if (!topic.trim()) { setError(t('errors.emptyTopic')); return; }
-    if (!ensureApiConfigured()) { pendingAnalysis.current = { topic, fresh }; return; }
+    if (!ensureApiConfigured()) { pendingAnalysis.current = { topic, fresh, context: analysisContext }; return; }
     setShowExample(false);
 
     const controller = new AbortController();
@@ -203,9 +224,10 @@ const MainPage: React.FC = () => {
         setReportTopic(topic);
         incrementUserAnalysisCount();
 
-        const newEntry: TopicHistoryEntry = { id: Date.now(), topic, report };
+        const newEntry: TopicHistoryEntry = { id: Date.now(), topic, report, ...(analysisContext ? { stockContext: analysisContext } : {}) };
         const newHistory = [newEntry, ...topicHistory].slice(0, 20);
-        updateTopicHistory(newHistory);
+        const stored = updateTopicHistory(newHistory);
+        setLinkedReport(stored && analysisContext ? { context: analysisContext, id: newEntry.id } : null);
     } catch (err) {
         if (activeRequest.current !== controller || controller.signal.aborted) return;
         controller.abort();
@@ -219,7 +241,7 @@ const MainPage: React.FC = () => {
           setTopicProgress(0);
         }
     }
-  }, [topicHistory, locale, t]);
+  }, [topicHistory, locale, t, stockContext]);
 
   const handleCancel = () => {
     activeRequest.current?.abort();
@@ -250,6 +272,9 @@ const MainPage: React.FC = () => {
     handleClearAllResults();
     setAnalysisReport(entry.report);
     setReportTopic(entry.topic);
+    const context = parseStockContext(JSON.stringify(entry.stockContext));
+    setLinkedReport(context ? { context, id: entry.id } : null);
+    setStockContext(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -265,7 +290,7 @@ const MainPage: React.FC = () => {
     if (!entry) return;
     setUserInput(entry.topic);
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    handleAnalyze(entry.topic, true);
+    handleAnalyze(entry.topic, true, parseStockContext(JSON.stringify(entry.stockContext)));
   };
 
   const handleClearTopicHistory = () => {
@@ -316,7 +341,7 @@ const MainPage: React.FC = () => {
               pendingAnalysis.current = null;
               if (pending) {
                 setIsApiSettingsOpen(false);
-                void handleAnalyze(pending.topic, pending.fresh);
+                void handleAnalyze(pending.topic, pending.fresh, pending.context);
                 return;
               }
               setToast({
@@ -350,6 +375,16 @@ const MainPage: React.FC = () => {
 
         <div className="workspace-main">
           <main id="main-content">
+            {incomingStock && <section className="stock-handoff" aria-label="来自股票池的研究">
+              <strong>从产业图谱带入 · {incomingStock.company}（{incomingStock.ticker}）</strong>
+              <p>{incomingStock.theme} · {incomingStock.question}</p>
+              <p>载入将替换当前草稿；确认内容后再开始分析。</p>
+              <button onClick={() => { setUserInput(stockDraft(incomingStock)); setStockContext(incomingStock); setIncomingStock(null); handleClearAllResults(); }}>载入研究草稿</button>
+              <button onClick={() => setIncomingStock(null)}>保留当前草稿</button>
+            </section>}
+            {stockContext && <div className="stock-handoff"><span>当前研究关联：{stockContext.company}（{stockContext.ticker}）</span><button onClick={() => setStockContext(null)}>解除关联</button><a href={stockReturnUrl(stockContext)}>返回股票池 ↗</a></div>}
+            {reportLinkMissing && <p className="stock-handoff" role="status">此浏览器找不到该报告。报告保存在生成时的浏览器中，可能已删除或来自其他设备。</p>}
+
             <a href="#news-input" onClick={event => { event.preventDefault(); document.getElementById('news-input')?.focus(); }} className="sr-only focus:not-sr-only focus:block focus:mb-4">{locale === 'zh' ? '跳到分析输入' : 'Skip to analysis input'}</a>
             <section className="workspace-intro mb-6 py-3 sm:py-5" aria-label={locale === 'zh' ? '开始研究' : 'Start researching'}>
               <p className="text-xs font-semibold tracking-widest text-amber-800">{locale === 'zh' ? '从信息，到有依据的判断' : 'FROM INFORMATION TO INFORMED JUDGMENT'}</p>
@@ -412,6 +447,8 @@ const MainPage: React.FC = () => {
                         </div>
                     </div>
                 ) : analysisReport ? (
+                  <>
+                    {linkedReport && <div className="stock-handoff"><strong>研究完成 · {linkedReport.context.ticker}</strong><p>将报告入口带回股票池；完整报告保存在当前浏览器，不会上传到股票池。</p><a href={stockReturnUrl(linkedReport.context, linkedReport.id)}>关联报告并返回股票池 ↗</a></div>}
                     <Suspense fallback={<p role="status" className="p-6 text-center text-sm text-stone-500">{locale === 'zh' ? '正在打开报告…' : 'Opening your report…'}</p>}>
                       <AnalysisResult
                           report={analysisReport}
@@ -419,6 +456,7 @@ const MainPage: React.FC = () => {
                           onNewAnalysis={handleNewAnalysis}
                       />
                     </Suspense>
+                  </>
                 ) : (
                   // Offer readable news before the deeper market indicators.
                   <div id="workspace-news" className="workspace-news space-y-6 scroll-mt-24">

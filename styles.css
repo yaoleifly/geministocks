@@ -76,3 +76,12 @@
  .workspace-nav, .workspace-header, .workspace-intro, .research-composer, .research-example-teaser, .workspace-history { display: none !important; }
  .workspace-main { padding: 0; }
 }
+.stock-handoff { grid-column: 1 / -1; border: 1px solid #d7c1af; background: #faf3eb; border-radius: 10px; padding: 18px; margin-bottom: 16px; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.stock-handoff p { margin: 8px 0; }
+.stock-handoff button, .stock-handoff a { display: inline-flex; min-height: 44px; align-items: center; margin-right: 16px; color: #934321; text-decoration: underline; }
+
+@media (min-width: 1024px) {
+ .workspace-main main:has(.stock-handoff) { display: block; }
+ .workspace-main main:has(.stock-handoff) .workspace-grid-idle { display: grid; }
+ .workspace-main main:has(.stock-handoff) .workspace-grid-idle .workspace-results { grid-row: 1 / span 3; }
+}
