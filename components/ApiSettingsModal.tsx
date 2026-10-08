@@ -27,6 +27,7 @@ interface CloudPreset {
   label: string;
   baseUrl: string;
   modelPlaceholder: string;
+  defaultModel?: string;
   // Optional hint shown when the preset is selected (e.g. where to get an API key)
   keyUrl?: string;
   hintZh?: string;
@@ -36,6 +37,15 @@ interface CloudPreset {
 }
 
 const PRESETS: CloudPreset[] = [
+  {
+    label: 'Monk',
+    baseUrl: 'https://monk.party/v1',
+    modelPlaceholder: 'monk',
+    defaultModel: 'monk',
+    keyUrl: 'https://monk.party/account/',
+    hintZh: '填入 Monk API Key 即可使用，连接地址和默认模型 monk 已自动配置。',
+    hintEn: 'Enter your Monk API key to get started. The endpoint and default model monk are configured automatically.',
+  },
   {
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1',
@@ -237,6 +247,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
   if (!isOpen) return null;
 
   // API Key is optional in local CLI mode (Ollama, Claude Code proxy, etc. usually need no key)
+  const isMonk = mode === 'cloud' && !isCustomProvider && baseUrl === 'https://monk.party/v1';
   const isValid = baseUrl.trim() && model.trim() && (mode === 'local' || apiKey.trim());
 
   const canFetchModels = baseUrl.trim() && (mode === 'local' || apiKey.trim());
@@ -457,6 +468,8 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
                   onClick={() => {
                     setIsCustomProvider(false);
                     setBaseUrl(p.baseUrl);
+                    if ('defaultModel' in p && p.defaultModel) setModel(p.defaultModel);
+                    else if (baseUrl === 'https://monk.party/v1') setModel('');
                     setTestResult(null);
                     setModelListError(null);
                     // If scan already fetched this service's models, populate immediately
@@ -659,6 +672,10 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
           </div>
 
           {/* Model */}
+          <details key={`model-${isMonk}`} open={!isMonk} className={isMonk ? 'rounded-lg border border-stone-200 p-3' : ''}>
+            <summary className={isMonk ? 'cursor-pointer text-sm text-stone-600' : 'hidden'}>
+              {zh ? `模型 · ${model}（可选修改）` : `Model · ${model} (optional)`}
+            </summary>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="api-model" className="block text-sm font-medium text-gray-700">
@@ -763,6 +780,7 @@ const ApiSettingsModal: React.FC<ApiSettingsModalProps> = ({ isOpen, onClose, on
                 : 'Models with JSON output support are recommended for best results.'}
             </p>
           </div>
+          </details>
 
           </div>
 
