@@ -1,3 +1,5 @@
+import { jsonrepair } from 'jsonrepair';
+
 /**
  * Extracts the likely JSON part from a string.
  * It looks for the first '{' or '['.
@@ -65,4 +67,36 @@ export function extractJson(text: string): string {
     // If we couldn't balance the braces (e.g. truncated output due to max_tokens),
     // we return the substring from the start. `jsonrepair` will handle closing it.
     return text.substring(startIndex);
+}
+
+/** Ignore provider reasoning blocks; they are not the final answer. */
+export function stripReasoning(text: string): string {
+    return text.replace(/^\s*<(think|thinking|analysis)\b[^>]*>[\s\S]*?<\/\1\s*>\s*/i, '').trim();
+}
+
+/** Prefer explicit JSON fences and parseable objects over prose brackets. */
+export function parseModelJson(content: unknown): any {
+    const text = stripReasoning(typeof content === 'string' ? content :
+        Array.isArray(content) ? content.filter(part => part?.type === 'text' && typeof part.text === 'string').map(part => part.text).join('\n') : '');
+    if (!text) throw new Error('Empty model answer');
+    const fenced = Array.from(text.matchAll(/```(?:json)?\s*\n?([\s\S]*?)```/gi), match => match[1].trim());
+    const candidates = [...fenced, text];
+    // Commentary such as [analysis] must not mask a valid object later in the answer.
+    const objectStart = text.indexOf('{');
+    if (objectStart !== -1) candidates.push(extractJson(text.slice(objectStart)));
+    candidates.push(extractJson(text));
+    for (const candidate of candidates) {
+        try {
+            const value = JSON.parse(candidate);
+            if (value !== null && typeof value === 'object') return value;
+        } catch { /* Try the next candidate before repairing malformed JSON. */ }
+    }
+    for (const candidate of candidates) {
+        if (!/^[{[]/.test(candidate)) continue;
+        try {
+            const value = JSON.parse(jsonrepair(candidate));
+            if (value !== null && typeof value === 'object') return value;
+        } catch { /* A provider may return prose even when JSON mode was requested. */ }
+    }
+    throw new Error('Invalid structured model answer');
 }
