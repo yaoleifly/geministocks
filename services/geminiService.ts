@@ -4,7 +4,6 @@ import type { IndicatorArticle } from './indicatorNewsService';
 
 import type { AnalysisReport } from '../types';
 import type { Locale } from '../hooks/useI18n';
-import { jsonrepair } from 'jsonrepair';
 import { captureError, addBreadcrumb } from '../utils/telemetry';
 import {
     buildArticlePrompt,
@@ -16,7 +15,7 @@ import {
 
 import { getApiConfig, getChatCompletionsUrl, buildAuthHeaders } from './apiConfigService';
 import { isExaSearchEnabled, searchExa, formatExaResultsForPrompt, getExaConfig } from './exaSearchService';
-import { extractJson } from '../utils/jsonUtils';
+import { parseModelJson } from '../utils/jsonUtils';
 
 // Error thrown when the user has not configured their API settings yet
 export const API_NOT_CONFIGURED_ERROR = 'API_NOT_CONFIGURED';
@@ -184,25 +183,45 @@ async function callOpenRouterAI(prompt: string, systemInstruction: string, model
             }
         }
 
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
-
-        if (!content) {
-            throw new Error('Received an empty response from the AI model.');
-        }
-
-        // 1. Extract the JSON part (remove markdown wrappers like ```json ... ```)
-        const rawJsonString = extractJson(content);
-
-        // 2. Use jsonrepair to fix truncated or malformed JSON
-        // This handles unclosed braces, missing quotes, missing commas, etc.
+        const parseResponse = async (reply: Response) => {
+            const data = await reply.json();
+            const choice = data.choices?.[0];
+            if (choice?.finish_reason === 'length') {
+                throw new Error('模型输出达到长度限制，报告未完整返回。请缩短输入或更换模型后重试。');
+            }
+            if (choice?.finish_reason === 'content_filter' || choice?.message?.refusal) {
+                throw new Error('模型未返回可用分析，请调整输入后重试。');
+            }
+            return choice?.message?.content;
+        };
+        const content = await parseResponse(response);
         try {
-            const repairedJsonString = jsonrepair(rawJsonString);
-            return JSON.parse(repairedJsonString);
-        } catch (e) {
-            console.error("JSON Repair failed. Raw content:", content);
-            // Re-throw a more informative error
-            throw new Error(`Failed to parse AI response. The model output was likely too corrupted to repair.`);
+            return parseModelJson(content);
+        } catch {
+            const isMonk = new URL(config.baseUrl, window.location.origin).hostname === 'monk.party';
+            if (isMonk && typeof content === 'string' && content.trim() && content.length <= 60_000) {
+                signal?.throwIfAborted();
+                addBreadcrumb('ai', 'Retrying Monk answer formatting once');
+                const retryBody = buildRequestBody(false);
+                retryBody.messages.push(
+                    { role: 'assistant', content },
+                    { role: 'user', content: 'Convert your previous answer to the exact JSON structure requested in the system message. Preserve the existing facts and conclusions. Return only the complete JSON object or array, without thinking blocks, commentary or Markdown fences.' }
+                );
+                // One formatting attempt; do not multiply paid calls with network retries.
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+                try {
+                    const retry = await fetch(apiUrl, {
+                        method: 'POST', headers, body: JSON.stringify(retryBody),
+                        signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal,
+                    });
+                    if (!retry.ok) throw new Error(formatHttpError(retry.status, await retry.text()));
+                    const retryContent = await parseResponse(retry);
+                    try { return parseModelJson(retryContent); }
+                    catch { throw new Error('Monk 返回内容未符合报告 JSON 格式，自动格式重试仍失败。请改用 monk-fast 或稍后重试。'); }
+                } finally { clearTimeout(timer); }
+            }
+            throw new Error('模型未返回有效的报告 JSON。请重试或更换模型；你的输入已保留。');
         }
 
     } catch (error) {
